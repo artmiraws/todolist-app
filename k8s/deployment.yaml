@@ -1,0 +1,67 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: todolist-app
+  namespace: todolist
+  labels:
+    app: todolist-app
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: todolist-app
+  template:
+    metadata:
+      labels:
+        app: todolist-app
+    spec:
+      serviceAccountName: todolist-app
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        fsGroup: 10001
+      containers:
+        - name: todolist-app
+          image: todolist-app:local
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 5000
+          envFrom:
+            - configMapRef:
+                name: todolist-config
+          env:
+            - name: HOSTNAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: SECRETS_DIR
+              value: "/var/run/secrets/todolist"
+          volumeMounts:
+            - name: secrets
+              mountPath: /var/run/secrets/todolist
+              readOnly: true
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 3
+            periodSeconds: 5
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 250m
+              memory: 256Mi
+      volumes:
+        - name: secrets
+          secret:
+            secretName: todolist-secrets
+            defaultMode: 0444
