@@ -120,3 +120,62 @@ A aplicação fica disponível em `http://localhost:5000`.
 
 A aplicação foi escrita para rodar em Kubernetes. Fora de um cluster, parte das
 funcionalidades não funciona por completo.
+
+## Executando em Kubernetes local (k3d)
+
+A forma recomendada para rodar a aplicação é dentro de um cluster Kubernetes local
+(k3d/k3s) — não há dependência de cloud, mas a experiência reflete um deploy real.
+
+Se você nunca usou Kubernetes, siga o guia completo em
+[`docs/local-kubernetes.md`](docs/local-kubernetes.md). Ele explica cada ferramenta,
+como instalá-la e o que cada comando faz.
+
+### Rápido (`make up`)
+
+Pré-requisitos: [Docker](https://www.docker.com/) e [k3d](https://k3d.io/) instalados.
+
+```bash
+make up
+```
+
+Esse comando cria o cluster, builda a imagem, faz o deploy e aguarda os pods
+ficarem prontos. A aplicação fica em **http://localhost:8080**
+(usuário: `admin` / senha: `admin`).
+
+Outros comandos úteis:
+
+| Comando | O que faz |
+|---|---|
+| `make status` | Mostra o estado dos pods e do ingress |
+| `make logs` | Acompanha os logs da aplicação |
+| `make health` | Testa o health check da aplicação |
+| `make down` | Remove a aplicação do cluster (mantém o cluster) |
+| `make destroy` | Destrói o cluster |
+| `make clean` | Remove a aplicação e destrói o cluster |
+
+### Conteúdo dos manifests (`k8s/`)
+
+| Arquivo | Recurso |
+|---|---|
+| `namespace.yaml` | Namespace `todolist` |
+| `configmap.yaml` | Variáveis públicas (APP_NAME, DB_HOST, etc.) |
+| `secret.yaml` | Credenciais sensíveis (DB_PASSWORD, SESSION_KEY, etc.) |
+| `postgres.yaml` | Deployment + Service + PVC do PostgreSQL |
+| `rbac.yaml` | ServiceAccount + Role + RoleBinding (acesso à API K8s) |
+| `deployment.yaml` | Deployment da aplicação (probes, limits, secrets) |
+| `service.yaml` | Service ClusterIP da aplicação |
+| `ingress.yaml` | Ingress local via Traefik, sem restrição de hostname (`localhost:8080`) |
+| `cronjob.yaml` | CronJob de limpeza de tarefas concluídas |
+| `hpa.yaml` | HorizontalPodAutoscaler (2–6 réplicas, CPU 60%) |
+
+### Observações
+
+- A imagem `postgres:16-alpine` é baixada do Docker Hub no primeiro deploy.
+- Os valores em `secret.yaml` são para ambiente local **apenas** — não devem ser usados
+  em produção. Em um cluster real, devem ser injetados via External Secrets Operator
+  e AWS Secrets Manager.
+- O HPA depende do `metrics-server` (incluído no k3s). Em cluster local com pouca
+  carga, a métrica de CPU pode não ser exposta imediatamente; o HPA aguarda a
+  primeira leitura antes de decidir a escala.
+- A página `/pods` e `/cleanup/status` requerem as permissões definidas em
+  `rbac.yaml`. Sem elas, a aplicação retorna uma mensagem amigável.
