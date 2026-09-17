@@ -121,6 +121,15 @@ A aplicação fica disponível em `http://localhost:5000`.
 A aplicação foi escrita para rodar em Kubernetes. Fora de um cluster, parte das
 funcionalidades não funciona por completo.
 
+## Estratégia de ambientes
+
+O plano completo está em [`docs/PLAN.md`](docs/PLAN.md).
+
+- **Local (k3s em k3d):** cluster de validação do desenvolvedor, sem custo de AWS; não é uma etapa de pipeline.
+- **Dev (AWS EKS):** escopo inicial de cloud — um único cluster EKS pequeno e econômico. Não há promoção de local para dev: o GitHub Actions builda a partir do código-fonte e faz o deploy no dev via Helm (planejado, ainda não implementado).
+- **Prod (EKS separado):** ambiente isolado, opcional e condicionado ao tempo restante após os requisitos; a promoção dev → prod reutiliza o mesmo digest de imagem testado, com aprovação explícita.
+- **Staging:** trabalho futuro — ambiente semelhante à produção para testes de performance e outras validações.
+
 ## Executando em Kubernetes local (k3d)
 
 A forma recomendada para rodar a aplicação é dentro de um cluster Kubernetes local
