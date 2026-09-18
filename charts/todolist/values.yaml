@@ -1,0 +1,111 @@
+nameOverride: ""
+fullnameOverride: ""
+
+image:
+  repository: todolist-app
+  # Prefer an immutable digest in CI (for example sha256:...); tag is the fallback.
+  digest: ""
+  tag: ""
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+
+replicaCount: 2
+
+serviceAccount:
+  create: true
+  name: ""
+  annotations: {}
+
+rbac:
+  create: true
+
+podAnnotations: {}
+podLabels: {}
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 10001
+  fsGroup: 10001
+
+securityContext: {}
+
+service:
+  type: ClusterIP
+  port: 80
+  targetPort: 5000
+
+config:
+  appName: TodoList
+  appPort: "5000"
+  appColor: ""
+  # Set the Aurora writer endpoint and database name at deploy time.
+  dbHost: ""
+  dbPort: "5432"
+  dbName: "todolist"
+
+# Secrets are synced from AWS Secrets Manager by the External Secrets Operator.
+externalSecret:
+  enabled: true
+  storeName: aws-secrets-manager
+  storeKind: ClusterSecretStore
+  refreshInterval: 1h
+  targetSecretName: ""
+  # ARN of the RDS-managed secret (keys: username, password).
+  dbSecretArn: ""
+  # Optional ARN of an application secret (keys: SESSION_KEY, ADMIN_USER, ADMIN_PASSWORD, CLEANUP_TOKEN).
+  appSecretArn: ""
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 64Mi
+  limits:
+    cpu: 250m
+    memory: 256Mi
+
+livenessProbe:
+  path: /healthz
+  initialDelaySeconds: 5
+  periodSeconds: 10
+
+readinessProbe:
+  path: /healthz
+  initialDelaySeconds: 3
+  periodSeconds: 5
+
+strategy:
+  type: RollingUpdate
+  rollingUpdate:
+    maxUnavailable: 0
+    maxSurge: 1
+
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 6
+  targetCPUUtilizationPercentage: 60
+
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 1
+
+ingress:
+  enabled: true
+  className: alb
+  annotations: {}
+  host: ""
+  path: /
+  pathType: Prefix
+  tls: []
+
+cleanup:
+  enabled: true
+  schedule: "*/5 * * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 1
+
+nodeSelector: {}
+tolerations: []
+affinity: {}

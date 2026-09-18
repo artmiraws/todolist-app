@@ -1,0 +1,47 @@
+{{- if .Values.cleanup.enabled -}}
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ include "todolist.fullname" . }}-cleanup
+  labels:
+    {{- include "todolist.labels" . | nindent 4 }}
+spec:
+  schedule: {{ .Values.cleanup.schedule | quote }}
+  concurrencyPolicy: {{ .Values.cleanup.concurrencyPolicy }}
+  successfulJobsHistoryLimit: {{ .Values.cleanup.successfulJobsHistoryLimit }}
+  failedJobsHistoryLimit: {{ .Values.cleanup.failedJobsHistoryLimit }}
+  jobTemplate:
+    spec:
+      template:
+        metadata:
+          labels:
+            {{- include "todolist.selectorLabels" . | nindent 12 }}
+        spec:
+          serviceAccountName: {{ include "todolist.serviceAccountName" . }}
+          restartPolicy: OnFailure
+          containers:
+            - name: cleanup
+              image: {{ include "todolist.image" . }}
+              imagePullPolicy: {{ .Values.image.pullPolicy }}
+              env:
+                - name: CLEANUP_TOKEN
+                  valueFrom:
+                    secretKeyRef:
+                      name: {{ include "todolist.secretName" . }}
+                      key: CLEANUP_TOKEN
+                - name: CLEANUP_URL
+                  value: "http://{{ include "todolist.fullname" . }}:{{ .Values.service.port }}/cleanup"
+              command:
+                - python
+                - -c
+                - |
+                  import os, requests
+                  token = os.environ["CLEANUP_TOKEN"]
+                  r = requests.post(
+                      os.environ["CLEANUP_URL"],
+                      headers={"X-Cleanup-Token": token},
+                      timeout=10,
+                  )
+                  print(r.text)
+                  r.raise_for_status()
+{{- end }}

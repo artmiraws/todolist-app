@@ -191,3 +191,10 @@ Outros comandos úteis:
   primeira leitura antes de decidir a escala.
 - A página `/pods` e `/cleanup/status` requerem as permissões definidas em
   `rbac.yaml`. Sem elas, a aplicação retorna uma mensagem amigável.
+
+## Helm (AWS dev)
+
+O chart em [`charts/todolist`](charts/todolist) empacota a aplicação para o ambiente `dev` na AWS
+(EKS), com imagem por digest, credenciais via External Secrets Operator e Ingress ALB. O
+desenvolvimento local continua usando os manifests em `k8s/` com `make up`. Detalhes, valores e
+diferenças entre local e cloud estão em [`docs/helm-chart.md`](docs/helm-chart.md).
