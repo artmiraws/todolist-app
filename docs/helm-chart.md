@@ -1,8 +1,41 @@
-# Helm chart (AWS dev)
+# Helm chart
 
-The `charts/todolist` chart packages the application for the AWS `dev` environment. Local
-development keeps using the plain manifests in `k8s/` through `make up`; the chart targets EKS and
-does not depend on a local PostgreSQL.
+The `charts/todolist` chart is the single source of truth for the application's Kubernetes objects,
+used by both local development and AWS dev. Local and cloud differences are expressed only in values
+files, never in duplicated manifests.
+
+## Why values are split this way
+
+Values files hold structure and non-sensitive environment configuration. They never hold secret
+values, and real cloud identifiers are injected at deploy time instead of being committed:
+
+- `values.yaml` — defaults and structure, shared by every environment.
+- `values-local.yaml` — **committed**. Local-only, non-sensitive values (`image.tag: local`,
+  in-cluster PostgreSQL, Traefik ingress, a dev-only Secret). Safe to share.
+- `values-dev.yaml` — **not committed**. Account ID, ECR repository, secret ARNs, Aurora endpoint,
+  hostname, and ACM ARN. CI generates it (or passes `--set`) from the Terraform outputs, so the
+  repository never contains the account ID and the values cannot drift from the infrastructure.
+- `values-dev.example.yaml` — committed template with placeholders.
+- Secret values (DB password, `SESSION_KEY`, admin password, cleanup token) are never in a values
+  file. Locally they come from a chart-managed dev-only Secret; in the cloud they are synced by the
+  External Secrets Operator from Secrets Manager.
+
+Rationale: committing real environment values would leak the account ID and would drift every time
+dev is torn down and recreated. Deriving them at deploy time from the single source of truth
+(Terraform state/outputs) keeps the repository public-safe and consistent.
+
+## Toggles
+
+| Concern | `values-local.yaml` (committed) | dev (CI / `values-dev.yaml`) |
+|---|---|---|
+| `postgresql.enabled` | `true` (in-cluster) | `false` (Aurora) |
+| `externalSecret.enabled` | `false` | `true` |
+| `secrets.create` | `true` (dev-only credentials) | `false` |
+| `ingress.className` | `traefik` | `alb` + host + ACM annotations |
+| `image` | tag `local` | repository + digest |
+
+`secrets.create` and `externalSecret.enabled` are mutually exclusive; the chart fails to render if
+both are set.
 
 ## What it renders
 
@@ -12,32 +45,20 @@ does not depend on a local PostgreSQL.
 | Service | ClusterIP on port 80 |
 | Ingress | ALB through the AWS Load Balancer Controller (Helm-owned) |
 | ConfigMap | Non-sensitive configuration (`APP_*`, `DB_HOST/PORT/NAME`) |
-| ExternalSecret | Syncs DB and app credentials from Secrets Manager through the `aws-secrets-manager` ClusterSecretStore |
+| Secret | Local-only credentials when `secrets.create` is true |
+| ExternalSecret | Cloud credentials synced from Secrets Manager through the `aws-secrets-manager` store |
+| PostgreSQL Deployment/Service/PVC | Local-only database when `postgresql.enabled` is true |
 | ServiceAccount + Role/RoleBinding | Lets `/pods` and `/cleanup/status` query the Kubernetes API |
 | HorizontalPodAutoscaler | CPU-based scaling (2-6 replicas) |
 | PodDisruptionBudget | `minAvailable: 1` for safe node drains |
 | CronJob | Calls the cleanup endpoint every 5 minutes |
 
-## Values
-
-See `values.yaml` and `values-dev.example.yaml`. The relevant AWS dev values are:
-
-- `image.repository` / `image.digest`: ECR repository and immutable digest.
-- `config.dbHost`: the Aurora writer endpoint (`tofu output -raw db_cluster_endpoint`).
-- `externalSecret.dbSecretArn`: the RDS-managed secret ARN
-  (`tofu output -raw db_master_user_secret_arn`).
-- `externalSecret.appSecretArn`: optional application secret with `SESSION_KEY`, `ADMIN_USER`,
-  `ADMIN_PASSWORD`, and `CLEANUP_TOKEN`.
-- `ingress.host` and `ingress.annotations`: documented hostname and ALB/certificate settings.
-
-No secret value is written to a values file; the chart references secret ARNs only.
-
 ## Local vs cloud differences
 
-| Concern | Local (`k8s/`, k3d) | AWS dev (this chart) |
+| Concern | Local (k3d) | AWS dev |
 |---|---|---|
 | Database | PostgreSQL Deployment in the cluster | Aurora PostgreSQL in private subnets |
-| Credentials | Plain `Secret` (`k8s/secret.yaml`) | `ExternalSecret` from Secrets Manager through ESO |
+| Credentials | Chart-managed dev-only `Secret` | `ExternalSecret` from Secrets Manager through ESO |
 | Ingress | Traefik, no hostname | ALB with the documented hostname and ACM |
 | Image | `todolist-app:local` imported into k3d | ECR image referenced by digest |
 | Secrets directory | `/var/run/secrets/todolist` | Same path, files written by ESO |
@@ -58,10 +79,12 @@ infrastructure repository owns the External Secrets Operator, its IRSA role, and
 
 ## Deploy
 
+Local (via `make up`):
+
 ```bash
 helm upgrade --install todolist charts/todolist \
   --namespace todolist --create-namespace \
-  -f charts/todolist/values-dev.yaml
+  -f charts/todolist/values-local.yaml
 ```
 
-CI generates `values-dev.yaml` from the Terraform outputs and the ECR image digest (EPIC-6).
+Cloud (CI, EPIC-6): the same command with a generated `values-dev.yaml`.

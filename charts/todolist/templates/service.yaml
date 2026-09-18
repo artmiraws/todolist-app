@@ -7,7 +7,7 @@ metadata:
 spec:
   type: {{ .Values.service.type }}
   selector:
-    {{- include "todolist.selectorLabels" . | nindent 4 }}
+    {{- include "todolist.appSelectorLabels" . | nindent 4 }}
   ports:
     - name: http
       port: {{ .Values.service.port }}

@@ -1,17 +1,26 @@
-# Example overrides for the AWS dev environment. Copy to values-dev.yaml (not committed)
-# and fill in the values produced by the infrastructure (see infra/environments/dev outputs).
+# Example overrides for the AWS dev environment. Copy to values-dev.yaml (gitignored) and fill in
+# the values produced by the infrastructure, or let CI inject them from the Terraform outputs.
+# Nothing here is committed with real account data.
 
 image:
   repository: "<account-id>.dkr.ecr.us-east-1.amazonaws.com/todolist"
   digest: "sha256:<image-digest>"
 
+# Cloud uses Aurora and the External Secrets Operator, not the in-cluster PostgreSQL/Secret.
+postgresql:
+  enabled: false
+
+secrets:
+  create: false
+
+externalSecret:
+  enabled: true
+  dbSecretArn: "arn:aws:secretsmanager:us-east-1:<account-id>:secret:<rds-managed-secret>"
+  appSecretArn: "arn:aws:secretsmanager:us-east-1:<account-id>:secret:todolist-dev/app"
+
 config:
   dbHost: "<aurora-writer-endpoint>"
   dbName: "todolist"
-
-externalSecret:
-  dbSecretArn: "arn:aws:secretsmanager:us-east-1:<account-id>:secret:<rds-managed-secret>"
-  appSecretArn: "arn:aws:secretsmanager:us-east-1:<account-id>:secret:todolist-dev/app"
 
 ingress:
   host: "dev.todolist.<base-domain>"

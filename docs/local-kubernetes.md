@@ -159,11 +159,15 @@ Esse comando vai:
 1. Criar um cluster k3d local (se não existir)
 2. Buildar a imagem Docker da aplicação
 3. Importar a imagem para dentro do cluster
-4. Aplicar todos os manifests k8s (namespace, banco, app, RBAC, etc.)
+4. Fazer o deploy do chart Helm (aplicação, banco local, RBAC, etc.)
 5. Aguardar os pods ficarem prontos
 
 Depois, acesse: **http://localhost:8080**
 (usuário: `admin` / senha: `admin`)
+
+O deploy usa o chart em `charts/todolist` com os valores de
+`charts/todolist/values-local.yaml` (PostgreSQL no cluster e um Secret local). Na AWS, o mesmo
+chart usa Aurora e o External Secrets Operator; veja [`helm-chart.md`](helm-chart.md).
 
 ---
 
@@ -184,23 +188,16 @@ docker build -t todolist-app:local .
 #    (sem isso, os nodes k3d não conseguem puxar a imagem)
 k3d image import todolist-app:local -c todolist
 
-# 4. Aplicar os manifests Kubernetes
-kubectl apply -f k8s/namespace.yaml
-kubectl apply -f k8s/configmap.yaml
-kubectl apply -f k8s/secret.yaml
-kubectl apply -f k8s/postgres.yaml
-kubectl apply -f k8s/rbac.yaml
-kubectl apply -f k8s/deployment.yaml
-kubectl apply -f k8s/service.yaml
-kubectl apply -f k8s/ingress.yaml
-kubectl apply -f k8s/cronjob.yaml
-kubectl apply -f k8s/hpa.yaml
+# 4. Fazer o deploy do chart Helm (usa charts/todolist/values-local.yaml)
+helm upgrade --install todolist charts/todolist \
+  --namespace todolist --create-namespace \
+  -f charts/todolist/values-local.yaml
 
 # 5. Aguardar o PostgreSQL ficar pronto
-kubectl -n todolist rollout status deploy/postgres
+kubectl -n todolist rollout status deploy/todolist-postgres
 
 # 6. Aguardar a aplicação ficar pronta
-kubectl -n todolist rollout status deploy/todolist-app
+kubectl -n todolist rollout status deploy/todolist
 
 # 7. Acessar no navegador
 #    http://localhost:8080
@@ -213,7 +210,7 @@ kubectl -n todolist rollout status deploy/todolist-app
 | Comando | O que faz |
 |---|---|
 | `make up` | Cria cluster + build + import + deploy (tudo de uma vez) |
-| `make down` | Remove todos os recursos do cluster (sem destruir o cluster) |
+| `make down` | Remove a release Helm e o namespace (sem destruir o cluster) |
 | `make destroy` | Destrói o cluster completamente |
 | `make clean` | Remove recursos + destrói o cluster (ambiente limpo) |
 | `make build` | Apenas builda a imagem Docker |
@@ -241,7 +238,8 @@ imagem.
 
 - **Usuário:** `admin`
 - **Senha:** `admin`
-- Valores definidos em `k8s/secret.yaml`. Não são seguros para produção.
+- Valores definidos no Secret local gerado pelo chart (`charts/todolist/values-local.yaml`). Não
+  são seguros para produção.
 
 ### Funcionalidades
 
@@ -269,14 +267,14 @@ não expostas em variáveis de ambiente dos pods.
 
 A aplicação usa **sessões Flask**, armazenadas em um cookie assinado com HMAC no
 navegador — não na memória do pod. A chave que assina o cookie (`SESSION_KEY`) é
-definida em `k8s/secret.yaml`. Como o cookie é do lado do cliente, o login
+definida no Secret local do chart (`charts/todolist/values-local.yaml`). Como o cookie é do lado do cliente, o login
 sobrevive a reinícios dos pods enquanto a `SESSION_KEY` não mudar; trocar a chave
 invalida as sessões existentes.
 
 ### Banco de dados
 
 - PostgreSQL 16 (Alpine) rodando como Deployment no namespace `todolist`
-- Dados persistidos em um PersistentVolumeClaim (`postgres-data`, 500Mi)
+- Dados persistidos em um PersistentVolumeClaim (`todolist-postgres-data`, 500Mi)
 - O schema é criado automaticamente pela aplicação na inicialização (`db.create_all()`)
 
 ### CronJob de limpeza
@@ -295,10 +293,10 @@ onde é possível pausar e retomar o agendamento.
 ```bash
 # Verificar status do PostgreSQL
 kubectl -n todolist get pods
-kubectl -n todolist logs deploy/postgres
+kubectl -n todolist logs deploy/todolist-postgres
 
 # Verificar logs da aplicação
-kubectl -n todolist logs -l app=todolist-app --tail=20
+kubectl -n todolist logs -l app.kubernetes.io/component=app --tail=20
 ```
 
 Espere até que o pod do PostgreSQL mostre `1/1 Running` antes de investigar
@@ -325,8 +323,8 @@ Se o ingress estiver OK mas o browser não acessa, tente:
 
 O ServiceAccount não tem permissões. Verifique:
 ```bash
-kubectl -n todolist get rolebinding todolist-app -o yaml
-kubectl -n todolist get sa todolist-app -o yaml
+kubectl -n todolist get rolebinding todolist -o yaml
+kubectl -n todolist get sa todolist -o yaml
 ```
 
 ### HPA não funciona (FailedComputeMetricsReplicas)
@@ -350,18 +348,15 @@ todolist-app/
 ├── requirements.txt    # Dependências Python
 ├── Makefile            # Comandos de automação
 ├── README.md           # Documentação geral
-├── docs/
-│   ├── local-kubernetes.md   # Este guia
-│   └── PLAN.md               # Plano do desafio DevOps
-└── k8s/
-    ├── namespace.yaml    # Namespace todolist
-    ├── configmap.yaml    # Configuração pública da app
-    ├── secret.yaml       # Credenciais sensíveis
-    ├── postgres.yaml     # PostgreSQL (Deployment + Service + PVC)
-    ├── rbac.yaml         # ServiceAccount + Role + RoleBinding
-    ├── deployment.yaml   # Deployment da aplicação
-    ├── service.yaml      # Service ClusterIP
-    ├── ingress.yaml      # Ingress via Traefik
-    ├── cronjob.yaml      # CronJob de limpeza
-    └── hpa.yaml          # HorizontalPodAutoscaler
+├── charts/
+│   └── todolist/
+│       ├── Chart.yaml
+│       ├── values.yaml             # Padrões e estrutura (todos os ambientes)
+│       ├── values-local.yaml       # Valores locais (PostgreSQL no cluster, Secret local)
+│       ├── values-dev.example.yaml # Exemplo para o dev na AWS
+│       └── templates/              # Deployment, Service, Ingress, ExternalSecret, etc.
+└── docs/
+    ├── local-kubernetes.md   # Este guia
+    ├── helm-chart.md         # Chart, valores e diferenças local/cloud
+    └── PLAN.md               # Plano do desafio DevOps
 ```

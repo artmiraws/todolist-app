@@ -49,6 +49,14 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 {{- end }}
 
 {{/*
+Selector labels for the application pods.
+*/}}
+{{- define "todolist.appSelectorLabels" -}}
+{{ include "todolist.selectorLabels" . }}
+app.kubernetes.io/component: app
+{{- end }}
+
+{{/*
 Service account name.
 */}}
 {{- define "todolist.serviceAccountName" -}}
@@ -75,4 +83,26 @@ Image reference, preferring an immutable digest.
 {{- else -}}
 {{- printf "%s:%s" .Values.image.repository (.Values.image.tag | default .Chart.AppVersion) -}}
 {{- end -}}
+{{- end }}
+
+{{/*
+Name of the in-cluster PostgreSQL service (local development only).
+*/}}
+{{- define "todolist.postgresServiceName" -}}
+{{- printf "%s-postgres" (include "todolist.fullname" .) | trunc 63 | trimSuffix "-" }}
+{{- end }}
+
+{{/*
+Name of the in-cluster PostgreSQL PVC (local development only).
+*/}}
+{{- define "todolist.postgresClaimName" -}}
+{{- printf "%s-postgres-data" (include "todolist.fullname" .) | trunc 63 | trimSuffix "-" }}
+{{- end }}
+
+{{/*
+Selector labels for the in-cluster PostgreSQL.
+*/}}
+{{- define "todolist.postgresSelectorLabels" -}}
+{{ include "todolist.selectorLabels" . }}
+app.kubernetes.io/component: postgres
 {{- end }}

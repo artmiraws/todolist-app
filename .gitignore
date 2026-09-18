@@ -4,5 +4,7 @@ __pycache__/
 *.py[cod]
 .env
 
-# Helm values with environment-specific data
-charts/todolist/values-dev.yaml
+# Helm values with environment-specific data (values-local.yaml is committed)
+charts/todolist/values-*.yaml
+!charts/todolist/values-local.yaml
+!charts/todolist/values-*.example.yaml

@@ -56,6 +56,25 @@ externalSecret:
   # Optional ARN of an application secret (keys: SESSION_KEY, ADMIN_USER, ADMIN_PASSWORD, CLEANUP_TOKEN).
   appSecretArn: ""
 
+# Create a Kubernetes Secret from the values below. Local development only.
+# Mutually exclusive with externalSecret.enabled.
+secrets:
+  create: false
+  data: {}
+
+# Deploy PostgreSQL in the cluster. Local development only; the cloud uses Aurora.
+postgresql:
+  enabled: false
+  image: postgres:16-alpine
+  storage: 500Mi
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      cpu: 200m
+      memory: 256Mi
+
 resources:
   requests:
     cpu: 50m

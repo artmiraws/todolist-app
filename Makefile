@@ -1,7 +1,9 @@
 CLUSTER_NAME     ?= todolist
 NAMESPACE        ?= todolist
+RELEASE          ?= todolist
 IMAGE            ?= todolist-app:local
-K8S_DIR          ?= k8s
+CHART_DIR        ?= charts/todolist
+LOCAL_VALUES     ?= $(CHART_DIR)/values-local.yaml
 HOST_PORT        ?= 8080
 EXPECTED_CONTEXT ?= k3d-$(CLUSTER_NAME)
 
@@ -11,18 +13,18 @@ EXPECTED_CONTEXT ?= k3d-$(CLUSTER_NAME)
 
 help:
 	@echo "Targets:"
-	@echo "  make up        - build image, create cluster, import, deploy, wait for ready"
+	@echo "  make up        - build image, create cluster, import, deploy with Helm, wait for ready"
 	@echo "  make build     - build the Docker image ($(IMAGE))"
 	@echo "  make cluster   - create the k3d cluster (port $(HOST_PORT):80)"
 	@echo "  make import    - import the image into the cluster"
-	@echo "  make deploy    - apply all manifests from $(K8S_DIR)/"
+	@echo "  make deploy    - helm upgrade --install using $(LOCAL_VALUES)"
 	@echo "  make wait      - wait until postgres and app are ready"
 	@echo "  make status    - show pods and ingress status"
 	@echo "  make logs      - tail the application logs"
 	@echo "  make health    - check the app health endpoint (fails on HTTP error)"
 	@echo "  make pf        - port-forward the app to localhost:5000"
 	@echo "  make restart   - restart the app deployment (pick up a rebuilt image)"
-	@echo "  make down      - undeploy everything (keeps the cluster)"
+	@echo "  make down      - uninstall the release and delete the namespace (keeps the cluster)"
 	@echo "  make destroy   - delete the whole cluster"
 	@echo "  make clean     - undeploy and delete the cluster"
 
@@ -48,20 +50,13 @@ import:
 	k3d image import $(IMAGE) -c $(CLUSTER_NAME)
 
 deploy: check-context
-	kubectl apply -f $(K8S_DIR)/namespace.yaml
-	kubectl apply -f $(K8S_DIR)/configmap.yaml
-	kubectl apply -f $(K8S_DIR)/secret.yaml
-	kubectl apply -f $(K8S_DIR)/postgres.yaml
-	kubectl apply -f $(K8S_DIR)/rbac.yaml
-	kubectl apply -f $(K8S_DIR)/deployment.yaml
-	kubectl apply -f $(K8S_DIR)/service.yaml
-	kubectl apply -f $(K8S_DIR)/ingress.yaml
-	kubectl apply -f $(K8S_DIR)/cronjob.yaml
-	kubectl apply -f $(K8S_DIR)/hpa.yaml
+	helm upgrade --install $(RELEASE) $(CHART_DIR) \
+		--namespace $(NAMESPACE) --create-namespace \
+		-f $(LOCAL_VALUES)
 
 wait: check-context
-	kubectl -n $(NAMESPACE) rollout status deploy/postgres --timeout=180s
-	kubectl -n $(NAMESPACE) rollout status deploy/todolist-app --timeout=180s
+	kubectl -n $(NAMESPACE) rollout status deploy/$(RELEASE)-postgres --timeout=180s
+	kubectl -n $(NAMESPACE) rollout status deploy/$(RELEASE) --timeout=180s
 	@echo "Ready. Open http://localhost:$(HOST_PORT) in your browser."
 
 status: check-context
@@ -70,21 +65,22 @@ status: check-context
 	kubectl -n $(NAMESPACE) get ingress
 
 logs: check-context
-	kubectl -n $(NAMESPACE) logs -l app=todolist-app -f
+	kubectl -n $(NAMESPACE) logs -l app.kubernetes.io/component=app -f
 
 health: check-context
 	@curl -fsS -m 5 http://localhost:$(HOST_PORT)/healthz && echo
 
 pf: check-context
-	kubectl -n $(NAMESPACE) port-forward svc/todolist-app 5000:80
+	kubectl -n $(NAMESPACE) port-forward svc/$(RELEASE) 5000:80
 
 restart: check-context
-	kubectl -n $(NAMESPACE) rollout restart deploy/todolist-app
+	kubectl -n $(NAMESPACE) rollout restart deploy/$(RELEASE)
 
 up: build cluster import deploy wait
 
 down: check-context
-	kubectl delete -f $(K8S_DIR)/namespace.yaml --ignore-not-found
+	helm uninstall $(RELEASE) --namespace $(NAMESPACE) --ignore-not-found
+	kubectl delete namespace $(NAMESPACE) --ignore-not-found
 
 destroy:
 	k3d cluster delete $(CLUSTER_NAME)

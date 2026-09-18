@@ -1,0 +1,33 @@
+# Local development values (k3d/k3s). Committed because they contain no sensitive or
+# environment-specific data. Cloud environments override these (see values-dev.example.yaml).
+
+image:
+  repository: todolist-app
+  tag: local
+  pullPolicy: IfNotPresent
+
+# Local uses a plain Kubernetes Secret instead of the External Secrets Operator.
+externalSecret:
+  enabled: false
+
+secrets:
+  create: true
+  data:
+    DB_USER: todolist
+    DB_PASSWORD: todolist123
+    SESSION_KEY: dev-only-insecure-session-key
+    ADMIN_USER: admin
+    ADMIN_PASSWORD: admin
+    CLEANUP_TOKEN: local-cleanup-token-123
+
+# Local runs PostgreSQL in the cluster; the cloud uses Aurora.
+postgresql:
+  enabled: true
+
+config:
+  appColor: blue
+
+ingress:
+  className: traefik
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: web

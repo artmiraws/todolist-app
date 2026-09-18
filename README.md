@@ -165,36 +165,38 @@ Outros comandos úteis:
 | `make destroy` | Destrói o cluster |
 | `make clean` | Remove a aplicação e destrói o cluster |
 
-### Conteúdo dos manifests (`k8s/`)
+### Conteúdo do chart (`charts/todolist/`)
 
-| Arquivo | Recurso |
+O deploy (local e cloud) usa um único chart Helm. Os valores locais ficam em
+`charts/todolist/values-local.yaml`; os valores de cloud são gerados no pipeline.
+
+| Recurso | O que faz |
 |---|---|
-| `namespace.yaml` | Namespace `todolist` |
-| `configmap.yaml` | Variáveis públicas (APP_NAME, DB_HOST, etc.) |
-| `secret.yaml` | Credenciais sensíveis (DB_PASSWORD, SESSION_KEY, etc.) |
-| `postgres.yaml` | Deployment + Service + PVC do PostgreSQL |
-| `rbac.yaml` | ServiceAccount + Role + RoleBinding (acesso à API K8s) |
-| `deployment.yaml` | Deployment da aplicação (probes, limits, secrets) |
-| `service.yaml` | Service ClusterIP da aplicação |
-| `ingress.yaml` | Ingress local via Traefik, sem restrição de hostname (`localhost:8080`) |
-| `cronjob.yaml` | CronJob de limpeza de tarefas concluídas |
-| `hpa.yaml` | HorizontalPodAutoscaler (2–6 réplicas, CPU 60%) |
+| Deployment | Aplicação (probes, resources, imagem por digest) |
+| Service | ClusterIP da aplicação |
+| Ingress | Traefik no local; ALB na AWS |
+| ConfigMap | Variáveis públicas (APP_NAME, DB_HOST, etc.) |
+| Secret | Credenciais locais (quando `secrets.create` está ligado) |
+| ExternalSecret | Credenciais na AWS via External Secrets Operator |
+| PostgreSQL | Deployment + Service + PVC, apenas no local (`postgresql.enabled`) |
+| RBAC | ServiceAccount + Role + RoleBinding (acesso à API K8s) |
+| HPA / PDB | Autoscaling (2–6 réplicas) e proteção em drenos de node |
+| CronJob | Limpeza de tarefas concluídas a cada 5 minutos |
 
 ### Observações
 
-- A imagem `postgres:16-alpine` é baixada do Docker Hub no primeiro deploy.
-- Os valores em `secret.yaml` são para ambiente local **apenas** — não devem ser usados
-  em produção. Em um cluster real, devem ser injetados via External Secrets Operator
-  e AWS Secrets Manager.
+- A imagem `postgres:16-alpine` é baixada do Docker Hub no primeiro deploy local.
+- As credenciais em `values-local.yaml` são para ambiente local **apenas** — não devem ser usadas
+  em produção. Na AWS, o mesmo chart usa o External Secrets Operator e o AWS Secrets Manager.
 - O HPA depende do `metrics-server` (incluído no k3s). Em cluster local com pouca
   carga, a métrica de CPU pode não ser exposta imediatamente; o HPA aguarda a
   primeira leitura antes de decidir a escala.
-- A página `/pods` e `/cleanup/status` requerem as permissões definidas em
-  `rbac.yaml`. Sem elas, a aplicação retorna uma mensagem amigável.
+- A página `/pods` e `/cleanup/status` requerem as permissões de RBAC do chart. Sem elas, a
+  aplicação retorna uma mensagem amigável.
 
-## Helm (AWS dev)
+## Helm
 
-O chart em [`charts/todolist`](charts/todolist) empacota a aplicação para o ambiente `dev` na AWS
-(EKS), com imagem por digest, credenciais via External Secrets Operator e Ingress ALB. O
-desenvolvimento local continua usando os manifests em `k8s/` com `make up`. Detalhes, valores e
-diferenças entre local e cloud estão em [`docs/helm-chart.md`](docs/helm-chart.md).
+O chart em [`charts/todolist`](charts/todolist) é a única fonte de verdade dos objetos Kubernetes da
+aplicação, usado tanto no local (`make up`, com `values-local.yaml`) quanto no `dev` na AWS (com
+valores gerados pelo pipeline). Detalhes, valores e diferenças entre local e cloud estão em
+[`docs/helm-chart.md`](docs/helm-chart.md).

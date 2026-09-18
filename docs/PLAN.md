@@ -86,7 +86,6 @@ infra/
 
 todolist-app/
 ├── Dockerfile
-├── k8s/
 ├── charts/todolist/
 └── .github/workflows/
 ```
@@ -133,13 +132,13 @@ For initial HTTP dev demonstrations use only disposable synthetic data and non-r
 
 ### Required: local and one AWS dev environment
 
-1. **EPIC-1 / R0 — Container and local setup:** multi-stage Dockerfile, k3d manifests, Makefile and instructions; validate login, health, and basic task operations.
+1. **EPIC-1 / R0 — Container and local setup:** multi-stage Dockerfile, Helm chart (`values-local.yaml`) for k3d, Makefile and instructions; validate login, health, and basic task operations.
 2. **EPIC-2 / R1 — State and networking:** bootstrap protected state, VPC/subnets, dev NAT choice, resource tags, budget estimate and alerts.
 3. **EPIC-3 / R1 — EKS dev foundation:** one cluster, small managed node group, IAM/OIDC, add-on bootstrap. Plan CI access to the Kubernetes API; AWS OIDC alone does not provide network reachability. Use a runner with a supported access path, never an unrestricted API endpoint as a shortcut.
 4. **EPIC-4 / R1 — Database:** Aurora dev capacity bounds, private connectivity, backup/retention settings, documented single-writer trade-off.
 5. **EPIC-5 / R1 — Secrets:** Secrets Manager and External Secrets Operator. Prefer service-managed credential generation where supported; protect any sensitive IaC state and avoid secret output in logs.
 6. **EPIC-6 / R2 — CI/CD to dev:** validation → build → simple image scan → ECR push → Helm deployment → smoke tests. Fail the scan on CRITICAL findings; retain the report. Use OIDC, least privilege, immutable digests, and deployment concurrency control. No prod or local-promotion stage.
-7. **EPIC-7 / R0/R4 — Application packaging:** Helm chart for AWS dev; explicit local/cloud configuration differences, probes, resources, secrets, replicas, HPA, and a PDB compatible with the small node pool.
+7. **EPIC-7 / R0/R4 — Application packaging:** one Helm chart shared by local and AWS dev; explicit local/cloud configuration differences, probes, resources, secrets, replicas, HPA, and a PDB compatible with the small node pool.
 8. **EPIC-8 / R3 — Browser access:** AWS load balancer controller, Helm-owned Ingress, correct DNS/access instructions and documented dev HTTP limitation.
 9. **EPIC-9 / R4 — Validation and recovery:** smoke tests, pod replacement, rollout behavior, measured HPA/node scaling, and database recovery checks. Record what small capacity cannot demonstrate; rehearsed dev teardown/recreation.
 10. **EPIC-11 / R5 — Runbook and ADRs:** document alongside implementation, not after optional features. Include an architecture diagram, environment strategy, cost rationale, evidence, and remaining limitations.

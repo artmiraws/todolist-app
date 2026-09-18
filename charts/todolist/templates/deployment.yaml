@@ -12,11 +12,11 @@ spec:
     {{- toYaml .Values.strategy | nindent 4 }}
   selector:
     matchLabels:
-      {{- include "todolist.selectorLabels" . | nindent 6 }}
+      {{- include "todolist.appSelectorLabels" . | nindent 6 }}
   template:
     metadata:
       labels:
-        {{- include "todolist.selectorLabels" . | nindent 8 }}
+        {{- include "todolist.appSelectorLabels" . | nindent 8 }}
         {{- with .Values.podLabels }}
         {{- toYaml . | nindent 8 }}
         {{- end }}
