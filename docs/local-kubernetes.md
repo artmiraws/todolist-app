@@ -9,9 +9,14 @@ do zero — sem experiência prévia com Kubernetes.
 
 | Ferramenta | O que é | Por que precisa |
 |---|---|---|
+| **Git** | Sistema de controle de versão | Clonar este repositório |
 | **Docker** | Plataforma para rodar aplicações em contêineres | O cluster k8s e a aplicação rodam como contêineres |
 | **k3d** | Kubernetes leve rodando dentro do Docker | Cria um cluster k8s local sem instalar nada no sistema |
 | **kubectl** | CLI para conversar com o cluster k8s | Gerencia os recursos (deploy, pods, serviços) dentro do cluster |
+| **make** | Ferramenta de automação | Executa os comandos do `Makefile` (`make up`, `make down`, etc.) |
+
+> As instruções foram validadas em Linux (Ubuntu). Os passos para macOS e Windows
+> estão incluídos como referência, mas não foram testados.
 
 ---
 
@@ -87,8 +92,9 @@ k3d version
 
 ### 2.3. kubectl
 
-O kubectl já vem junto com o k3d — não precisa instalar separadamente.
-Mas se quiser ter a versão standalone (recomendado para Windows):
+O k3d **não** instala o `kubectl` na sua máquina. O binário existe dentro do
+contêiner do k3s, mas para gerenciar o cluster a partir do host é preciso
+instalar o `kubectl` separadamente:
 
 **Linux e macOS:**
 ```bash
@@ -106,6 +112,33 @@ Move-Item kubectl.exe ~/.local/bin/kubectl.exe
 **Verificar:**
 ```bash
 kubectl version --client
+```
+
+---
+
+### 2.4. Git e make
+
+O Git é necessário para clonar o repositório e o `make` para executar os comandos
+do `Makefile`.
+
+**Linux (Ubuntu/Debian):**
+```bash
+sudo apt-get update
+sudo apt-get install -y git make
+```
+
+**macOS:**
+```bash
+# O make faz parte das Command Line Tools do Xcode:
+xcode-select --install
+# O Git normalmente já vem instalado; caso contrário:
+brew install git
+```
+
+**Verificar:**
+```bash
+git --version
+make --version
 ```
 
 ---
@@ -187,8 +220,18 @@ kubectl -n todolist rollout status deploy/todolist-app
 | `make import` | Apenas importa a imagem para o cluster |
 | `make status` | Mostra o estado dos pods e deploys |
 | `make logs` | Mostra os logs da aplicação em tempo real |
-| `make health` | Testa o endpoint de health da aplicação |
+| `make health` | Testa o endpoint de health da aplicação (falha se a resposta não for HTTP 2xx) |
 | `make pf` | Port-forward como alternativa ao ingress (acesso via `localhost:5000`) |
+| `make restart` | Reinicia o Deployment da aplicação (para pegar uma imagem reconstruída) |
+
+Os comandos que usam `kubectl` verificam se o contexto atual é `k3d-todolist`
+(`k3d-<nome-do-cluster>`) antes de executar, para não alterar outro cluster por
+engano. Para trocar manualmente: `kubectl config use-context k3d-todolist`.
+
+Como a imagem local usa a tag fixa `todolist-app:local`, reconstruir a imagem e
+rodar `make up` de novo não reinicia os pods (a tag não mudou). Depois de
+`make build && make import`, rode `make restart` para o Deployment pegar a nova
+imagem.
 
 ---
 
@@ -224,9 +267,11 @@ não expostas em variáveis de ambiente dos pods.
 
 ### Sessões
 
-A aplicação usa **sessões Flask** (cookies assinados com HMAC). A chave de sessão
-(`SESSION_KEY`) é definida em `k8s/secret.yaml`. Em ambiente local, a sessão é
-armazenada em memória do pod — se o pod reiniciar, os usuários são deslogados.
+A aplicação usa **sessões Flask**, armazenadas em um cookie assinado com HMAC no
+navegador — não na memória do pod. A chave que assina o cookie (`SESSION_KEY`) é
+definida em `k8s/secret.yaml`. Como o cookie é do lado do cliente, o login
+sobrevive a reinícios dos pods enquanto a `SESSION_KEY` não mudar; trocar a chave
+invalida as sessões existentes.
 
 ### Banco de dados
 
@@ -268,8 +313,8 @@ kubectl -n todolist get ingress
 # Verificar se o Traefik está rodando
 kubectl -n kube-system get pods | grep traefik
 
-# Testar com curl
-curl -sS http://localhost:8080/healthz -H "Host: todolist.localhost"
+# Testar com curl (o ingress não restringe hostname, então não é preciso header Host)
+curl -fsS http://localhost:8080/healthz
 ```
 
 Se o ingress estiver OK mas o browser não acessa, tente:

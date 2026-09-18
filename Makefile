@@ -1,12 +1,13 @@
-CLUSTER_NAME ?= todolist
-NAMESPACE    ?= todolist
-IMAGE        ?= todolist-app:local
-K8S_DIR      ?= k8s
-HOST_PORT    ?= 8080
+CLUSTER_NAME     ?= todolist
+NAMESPACE        ?= todolist
+IMAGE            ?= todolist-app:local
+K8S_DIR          ?= k8s
+HOST_PORT        ?= 8080
+EXPECTED_CONTEXT ?= k3d-$(CLUSTER_NAME)
 
 .DEFAULT_GOAL := help
 
-.PHONY: help build cluster import deploy wait status logs health pf up down destroy clean
+.PHONY: help build cluster import deploy wait status logs health pf restart up down destroy clean check-context
 
 help:
 	@echo "Targets:"
@@ -18,14 +19,23 @@ help:
 	@echo "  make wait      - wait until postgres and app are ready"
 	@echo "  make status    - show pods and ingress status"
 	@echo "  make logs      - tail the application logs"
-	@echo "  make health    - check the app health endpoint"
+	@echo "  make health    - check the app health endpoint (fails on HTTP error)"
 	@echo "  make pf        - port-forward the app to localhost:5000"
+	@echo "  make restart   - restart the app deployment (pick up a rebuilt image)"
 	@echo "  make down      - undeploy everything (keeps the cluster)"
 	@echo "  make destroy   - delete the whole cluster"
 	@echo "  make clean     - undeploy and delete the cluster"
 
 build:
 	docker build -t $(IMAGE) .
+
+check-context:
+	@ctx="$$(kubectl config current-context 2>/dev/null)"; \
+	if [ "$$ctx" != "$(EXPECTED_CONTEXT)" ]; then \
+		echo "kubectl context is '$$ctx', expected '$(EXPECTED_CONTEXT)'."; \
+		echo "Switch with: kubectl config use-context $(EXPECTED_CONTEXT)"; \
+		exit 1; \
+	fi
 
 cluster:
 	@if k3d cluster list $(CLUSTER_NAME) >/dev/null 2>&1; then \
@@ -37,7 +47,7 @@ cluster:
 import:
 	k3d image import $(IMAGE) -c $(CLUSTER_NAME)
 
-deploy:
+deploy: check-context
 	kubectl apply -f $(K8S_DIR)/namespace.yaml
 	kubectl apply -f $(K8S_DIR)/configmap.yaml
 	kubectl apply -f $(K8S_DIR)/secret.yaml
@@ -49,28 +59,31 @@ deploy:
 	kubectl apply -f $(K8S_DIR)/cronjob.yaml
 	kubectl apply -f $(K8S_DIR)/hpa.yaml
 
-wait:
+wait: check-context
 	kubectl -n $(NAMESPACE) rollout status deploy/postgres --timeout=180s
 	kubectl -n $(NAMESPACE) rollout status deploy/todolist-app --timeout=180s
 	@echo "Ready. Open http://localhost:$(HOST_PORT) in your browser."
 
-status:
+status: check-context
 	kubectl -n $(NAMESPACE) get pods -o wide
 	@echo "---"
 	kubectl -n $(NAMESPACE) get ingress
 
-logs:
+logs: check-context
 	kubectl -n $(NAMESPACE) logs -l app=todolist-app -f
 
-health:
-	@curl -sS -m 5 http://localhost:$(HOST_PORT)/healthz -H "Host: todolist.localhost"; echo
+health: check-context
+	@curl -fsS -m 5 http://localhost:$(HOST_PORT)/healthz && echo
 
-pf:
+pf: check-context
 	kubectl -n $(NAMESPACE) port-forward svc/todolist-app 5000:80
+
+restart: check-context
+	kubectl -n $(NAMESPACE) rollout restart deploy/todolist-app
 
 up: build cluster import deploy wait
 
-down:
+down: check-context
 	kubectl delete -f $(K8S_DIR)/namespace.yaml --ignore-not-found
 
 destroy:

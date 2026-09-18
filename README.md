@@ -141,7 +141,9 @@ como instalá-la e o que cada comando faz.
 
 ### Rápido (`make up`)
 
-Pré-requisitos: [Docker](https://www.docker.com/) e [k3d](https://k3d.io/) instalados.
+Pré-requisitos: [Docker](https://www.docker.com/), [k3d](https://k3d.io/),
+`kubectl` e `make` instalados (instruções em
+[`docs/local-kubernetes.md`](docs/local-kubernetes.md)).
 
 ```bash
 make up
@@ -157,7 +159,8 @@ Outros comandos úteis:
 |---|---|
 | `make status` | Mostra o estado dos pods e do ingress |
 | `make logs` | Acompanha os logs da aplicação |
-| `make health` | Testa o health check da aplicação |
+| `make health` | Testa o health check da aplicação (falha se a resposta não for HTTP 2xx) |
+| `make restart` | Reinicia o Deployment (para pegar uma imagem reconstruída) |
 | `make down` | Remove a aplicação do cluster (mantém o cluster) |
 | `make destroy` | Destrói o cluster |
 | `make clean` | Remove a aplicação e destrói o cluster |
