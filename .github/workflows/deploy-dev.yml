@@ -3,12 +3,15 @@ name: Deploy dev
 on:
   push:
     branches: [main]
+    # The digest commit below lands on main; ignore it so the workflow never re-triggers itself.
+    paths-ignore:
+      - "charts/todolist/gitops/**"
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
-# One deploy per environment; avoids concurrent Helm/EKS changes.
+# One deploy per environment; avoids concurrent Git updates.
 concurrency:
   group: deploy-dev
   cancel-in-progress: false
@@ -17,15 +20,17 @@ env:
   AWS_REGION: us-east-1
   ECR_REPOSITORY: todolist
   CLUSTER_NAME: todolist-dev
+  APP_NAME: todolist-dev
+  ARGOCD_NAMESPACE: argocd
   NAMESPACE: todolist
-  RELEASE: todolist
   HELM_CHART: charts/todolist
+  DIGEST_FILE: charts/todolist/gitops/dev.yaml
 
 jobs:
   build-and-deploy:
     # Self-hosted ARC runner in the VPC (registered by the infra repo). Uses IRSA, not GitHub OIDC.
     runs-on: arc-runner-set
-    # Deployment tracking only; wiring is read from SSM Parameter Store (/todolist/dev), not repo variables.
+    # Deployment tracking only; wiring comes from OpenTofu and SSM, not repo variables.
     environment: dev
     steps:
       - uses: actions/checkout@v7
@@ -54,6 +59,9 @@ jobs:
 
       - name: Show identity (IRSA)
         run: aws sts get-caller-identity
+
+      - name: Lint chart
+        run: helm lint "$HELM_CHART"
 
       - name: Build image
         id: build
@@ -91,51 +99,51 @@ jobs:
           DIGEST="$(grep -oE 'sha256:[0-9a-f]{64}' /tmp/push.out | tail -1)"
           test -n "$DIGEST"
           echo "digest=${DIGEST}" >> "$GITHUB_OUTPUT"
-          echo "Deployed digest: ${DIGEST}"
+          echo "Pushed digest: ${DIGEST}"
+
+      - name: Commit digest (GitOps)
+        env:
+          DIGEST: ${{ steps.push.outputs.digest }}
+        run: |
+          set -euo pipefail
+          # Only the digest is committed; Argo CD reconciles it (ADR-012). A GITHUB_TOKEN push does
+          # not re-trigger workflows, and paths-ignore guards it anyway.
+          sed -i -E "s|^([[:space:]]*digest:).*|\1 \"${DIGEST}\"|" "$DIGEST_FILE"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if git diff --quiet -- "$DIGEST_FILE"; then
+            echo "Digest unchanged; nothing to commit"
+          else
+            git add "$DIGEST_FILE"
+            git commit -m "chore(deploy): dev image ${DIGEST} [skip ci]"
+            git push origin HEAD:main
+          fi
 
       - name: Configure kubectl
         run: aws eks update-kubeconfig --name "$CLUSTER_NAME" --region "$AWS_REGION"
 
-      - name: Render dev values
+      - name: Wait for Argo CD to sync
         run: |
           set -euo pipefail
-          ssm() { aws ssm get-parameter --name "/todolist/dev/$1" --query Parameter.Value --output text; }
-          APP_HOSTNAME="$(ssm app_hostname)"
-          DB_HOST="$(ssm db_host)"
-          DB_SECRET_ARN="$(ssm db_secret_arn)"
-          APP_SECRET_ARN="$(ssm app_secret_arn)"
-          CERT_ARN="$(ssm ingress_certificate_arn)"
-          echo "APP_HOSTNAME=${APP_HOSTNAME}" >> "$GITHUB_ENV"
-          cat > /tmp/values-dev.yaml <<EOF
-          image:
-            repository: ${{ steps.build.outputs.image }}
-            digest: "${{ steps.push.outputs.digest }}"
-          config:
-            dbHost: "${DB_HOST}"
-          externalSecret:
-            dbSecretArn: "${DB_SECRET_ARN}"
-            appSecretArn: "${APP_SECRET_ARN}"
-          ingress:
-            host: "${APP_HOSTNAME}"
-            annotations:
-              alb.ingress.kubernetes.io/scheme: internet-facing
-              alb.ingress.kubernetes.io/target-type: ip
-              alb.ingress.kubernetes.io/listen-ports: '[{"HTTPS":443}]'
-              alb.ingress.kubernetes.io/ssl-redirect: "443"
-              alb.ingress.kubernetes.io/certificate-arn: "${CERT_ARN}"
-          EOF
-          cat /tmp/values-dev.yaml
-
-      - name: Deploy (Helm)
-        run: |
-          helm upgrade --install "$RELEASE" "$HELM_CHART" \
-            --namespace "$NAMESPACE" --create-namespace \
-            -f /tmp/values-dev.yaml \
-            --wait --timeout 5m
+          kubectl -n "$ARGOCD_NAMESPACE" annotate application "$APP_NAME" \
+            argocd.argoproj.io/refresh=hard --overwrite || true
+          for i in $(seq 1 40); do
+            SYNC="$(kubectl -n "$ARGOCD_NAMESPACE" get application "$APP_NAME" -o jsonpath='{.status.sync.status}' 2>/dev/null || true)"
+            HEALTH="$(kubectl -n "$ARGOCD_NAMESPACE" get application "$APP_NAME" -o jsonpath='{.status.health.status}' 2>/dev/null || true)"
+            echo "sync=${SYNC} health=${HEALTH} ($i)"
+            if [ "$SYNC" = "Synced" ] && [ "$HEALTH" = "Healthy" ]; then
+              exit 0
+            fi
+            sleep 15
+          done
+          echo "Argo CD did not reach Synced/Healthy in time"
+          kubectl -n "$ARGOCD_NAMESPACE" get application "$APP_NAME" -o yaml | tail -50
+          exit 1
 
       - name: Smoke test
         run: |
           set -euo pipefail
+          APP_HOSTNAME="$(aws ssm get-parameter --name "/todolist/dev/app_hostname" --query Parameter.Value --output text)"
           for i in $(seq 1 20); do
             if curl -fsS --max-time 15 "https://${APP_HOSTNAME}/healthz"; then
               echo; echo "Smoke test passed"; exit 0

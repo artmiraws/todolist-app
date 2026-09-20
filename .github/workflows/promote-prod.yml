@@ -1,0 +1,122 @@
+name: Promote prod
+
+on:
+  # Production deploys on a published release, never on a push to main.
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      digest:
+        description: "Image digest to deploy (defaults to the current dev-validated digest)"
+        required: false
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: promote-prod
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: us-east-1
+  CLUSTER_NAME: todolist-prod
+  APP_NAME: todolist-prod
+  ARGOCD_NAMESPACE: argocd
+  ENVIRONMENT: prod
+  DEV_DIGEST_FILE: charts/todolist/gitops/dev.yaml
+  PROD_DIGEST_FILE: charts/todolist/gitops/prod.yaml
+
+jobs:
+  promote:
+    # Runner in the prod VPC (the prod EKS API endpoint is private).
+    runs-on: arc-runner-set-prod
+    # Requires a reviewer, so promotion is an explicit approval.
+    environment: prod
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install tools
+        run: |
+          set -euo pipefail
+          mkdir -p "$HOME/.local/bin"
+          if ! command -v aws >/dev/null 2>&1; then
+            curl -sS "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o /tmp/awscliv2.zip
+            unzip -q /tmp/awscliv2.zip -d /tmp
+            /tmp/aws/install -i "$HOME/.local/aws-cli" -b "$HOME/.local/bin"
+          fi
+          if ! command -v kubectl >/dev/null 2>&1; then
+            curl -sSLO "https://dl.k8s.io/release/v1.36.0/bin/linux/amd64/kubectl"
+            chmod +x kubectl && mv kubectl "$HOME/.local/bin/"
+          fi
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Show identity (IRSA)
+        run: aws sts get-caller-identity
+
+      - name: Resolve digest to promote
+        id: digest
+        env:
+          REQUESTED: ${{ github.event.inputs.digest }}
+        run: |
+          set -euo pipefail
+          if [ -n "${REQUESTED:-}" ]; then
+            # Rollback path: an explicit digest (for example, a previous release).
+            DIGEST="${REQUESTED}"
+          else
+            # Default: the digest dev currently runs - the artifact dev already validated. No rebuild.
+            DIGEST="$(sed -nE 's/^[[:space:]]*digest:[[:space:]]*"?([^"]+)"?.*/\1/p' "$DEV_DIGEST_FILE" | head -1)"
+          fi
+          test -n "$DIGEST"
+          echo "digest=${DIGEST}" >> "$GITHUB_OUTPUT"
+          echo "Promoting digest: ${DIGEST}"
+
+      - name: Commit digest to prod (GitOps)
+        env:
+          DIGEST: ${{ steps.digest.outputs.digest }}
+        run: |
+          set -euo pipefail
+          sed -i -E "s|^([[:space:]]*digest:).*|\1 \"${DIGEST}\"|" "$PROD_DIGEST_FILE"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if git diff --quiet -- "$PROD_DIGEST_FILE"; then
+            echo "Prod already at ${DIGEST}; nothing to commit"
+          else
+            git add "$PROD_DIGEST_FILE"
+            git commit -m "chore(deploy): promote ${DIGEST} to prod [skip ci]"
+            git push origin HEAD:main
+          fi
+
+      - name: Configure kubectl
+        run: aws eks update-kubeconfig --name "$CLUSTER_NAME" --region "$AWS_REGION"
+
+      - name: Wait for Argo CD to sync
+        run: |
+          set -euo pipefail
+          kubectl -n "$ARGOCD_NAMESPACE" annotate application "$APP_NAME" \
+            argocd.argoproj.io/refresh=hard --overwrite || true
+          for i in $(seq 1 40); do
+            SYNC="$(kubectl -n "$ARGOCD_NAMESPACE" get application "$APP_NAME" -o jsonpath='{.status.sync.status}' 2>/dev/null || true)"
+            HEALTH="$(kubectl -n "$ARGOCD_NAMESPACE" get application "$APP_NAME" -o jsonpath='{.status.health.status}' 2>/dev/null || true)"
+            echo "sync=${SYNC} health=${HEALTH} ($i)"
+            if [ "$SYNC" = "Synced" ] && [ "$HEALTH" = "Healthy" ]; then
+              exit 0
+            fi
+            sleep 15
+          done
+          echo "Argo CD did not reach Synced/Healthy in time"
+          kubectl -n "$ARGOCD_NAMESPACE" get application "$APP_NAME" -o yaml | tail -50
+          exit 1
+
+      - name: Smoke test
+        run: |
+          set -euo pipefail
+          APP_HOSTNAME="$(aws ssm get-parameter --name "/todolist/${ENVIRONMENT}/app_hostname" --query Parameter.Value --output text)"
+          for i in $(seq 1 20); do
+            if curl -fsS --max-time 15 "https://${APP_HOSTNAME}/healthz"; then
+              echo; echo "Smoke test passed"; exit 0
+            fi
+            echo "waiting for ${APP_HOSTNAME}... ($i)"
+            sleep 15
+          done
+          echo "Smoke test failed"; exit 1
