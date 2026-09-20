@@ -15,133 +15,38 @@ Kubernetes experience needed.
 | **kubectl** | CLI to talk to the k8s cluster | Manages resources (deployments, pods, services) |
 | **make** | Automation tool | Runs the `Makefile` commands (`make up`, `make down`, etc.) |
 
-> Instructions were validated on Linux (Ubuntu). macOS and Windows steps are included for reference
+> Instructions were validated on Linux (Fedora). macOS and Windows steps are included for reference
 > but were not tested.
 
 ---
 
 ## 2. Installing the tools
 
-### 2.1. Docker
+Install Git, Docker, k3d, kubectl, and make. Use each project's official instructions for your
+distribution — the links below are enough; no need to copy long command blocks.
 
-Docker is the foundation; nothing works without it. `k3d` works with any Docker-compatible runtime.
+| Tool | Install |
+|---|---|
+| Git | [git-scm.com/downloads](https://git-scm.com/downloads) |
+| Docker | [Docker Engine](https://docs.docker.com/engine/install/) (free on Linux) |
+| k3d | [k3d.io](https://k3d.io/#installation) |
+| kubectl | [kubernetes.io/docs/tasks/tools](https://kubernetes.io/docs/tasks/tools/) — k3d does **not** install it |
+| make | your package manager: `sudo dnf install make` (Fedora) / `sudo apt install make` (Ubuntu) |
 
-> **Licensing:** Docker Engine (Linux) is free and open source. **Docker Desktop** is free for
+`k3d` runs a full Kubernetes cluster (k3s) inside a Docker container, so it works with any
+Docker-compatible runtime.
+
+> **Docker licensing:** Docker Engine (Linux) is free and open source. **Docker Desktop** is free for
 > personal use and small businesses, but requires a paid subscription for larger companies (more
 > than 250 employees, or more than US$10M in annual revenue). On macOS/Windows, if that applies, use
 > an open-source alternative such as **Colima** or **Rancher Desktop**.
 
-**Linux (Ubuntu/Debian):**
-```bash
-# Install Docker Engine
-curl -fsSL https://get.docker.com | sh
-
-# Add your user to the docker group (so you don't need sudo)
-sudo usermod -aG docker $USER
-
-# Log out and back in for the group change to take effect
-```
-
-**macOS:**
-- [Docker Desktop](https://www.docker.com/products/docker-desktop/) (see the licensing note above), or
-- Colima (open source): `brew install colima docker && colima start`
-
-**Windows:**
-- [Docker Desktop](https://www.docker.com/products/docker-desktop/) (see the licensing note above), or
-- Rancher Desktop (open source).
-- Enable WSL2 when prompted during installation.
-
-**Verify:**
-```bash
-docker --version
-docker run --rm hello-world
-```
-
-If the second command prints "Hello from Docker!", you're good.
-
----
-
-### 2.2. k3d
-
-k3d runs a full Kubernetes cluster (k3s) inside a Docker container — it installs nothing outside
-Docker, needs no root, and can be created/destroyed in seconds.
-
-**Linux and macOS:**
-```bash
-curl -sSL https://raw.githubusercontent.com/k3d-io/k3d/main/install.sh | TAG=v5.8.3 bash
-```
-
-> If the command asks for a password (sudo), the script could not write to `/usr/local/bin`.
-> In that case, download the binary manually:
-> ```bash
-> mkdir -p ~/.local/bin
-> curl -sSL -o ~/.local/bin/k3d https://github.com/k3d-io/k3d/releases/download/v5.8.3/k3d-linux-amd64
-> chmod +x ~/.local/bin/k3d
-> # Add ~/.local/bin to PATH if it isn't already:
-> echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
-> source ~/.bashrc
-> ```
-> On macOS, replace `k3d-linux-amd64` with `k3d-darwin-amd64`.
-
-**Windows:**
-```powershell
-# In PowerShell (as administrator):
-curl -sSL -o ~/.local/bin/k3d.exe https://github.com/k3d-io/k3d/releases/download/v5.8.3/k3d-windows-amd64.exe
-```
-
-**Verify:**
-```bash
-k3d version
-```
-
----
-
-### 2.3. kubectl
-
-k3d does **not** install `kubectl` on your machine. The binary exists inside the k3s container, but
-to manage the cluster from the host you must install `kubectl` separately:
-
-**Linux and macOS:**
-```bash
-curl -sLO "https://dl.k8s.io/release/$(curl -sL https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
-chmod +x kubectl
-sudo mv kubectl /usr/local/bin/
-```
-
-**Windows (PowerShell):**
-```powershell
-curl -sLO "https://dl.k8s.io/release/v1.31.0/bin/windows/amd64/kubectl.exe"
-Move-Item kubectl.exe ~/.local/bin/kubectl.exe
-```
-
-**Verify:**
-```bash
-kubectl version --client
-```
-
----
-
-### 2.4. Git and make
-
-Git is needed to clone the repository and `make` to run the `Makefile` commands.
-
-**Linux (Ubuntu/Debian):**
-```bash
-sudo apt-get update
-sudo apt-get install -y git make
-```
-
-**macOS:**
-```bash
-# make ships with the Xcode Command Line Tools:
-xcode-select --install
-# Git is usually already installed; otherwise:
-brew install git
-```
-
 **Verify:**
 ```bash
 git --version
+docker --version
+k3d version
+kubectl version --client
 make --version
 ```
 
