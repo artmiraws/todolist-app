@@ -21,7 +21,7 @@ concurrency:
 env:
   AWS_REGION: us-east-1
   CLUSTER_NAME: todolist-prod
-  APP_NAME: todolist-prod
+  APP_NAME: todolist
   ARGOCD_NAMESPACE: argocd
   ENVIRONMENT: prod
   DEV_DIGEST_FILE: charts/todolist/gitops/dev.yaml

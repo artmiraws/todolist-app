@@ -20,7 +20,7 @@ env:
   AWS_REGION: us-east-1
   ECR_REPOSITORY: todolist
   CLUSTER_NAME: todolist-dev
-  APP_NAME: todolist-dev
+  APP_NAME: todolist
   ARGOCD_NAMESPACE: argocd
   NAMESPACE: todolist
   HELM_CHART: charts/todolist
