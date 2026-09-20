@@ -176,3 +176,4 @@ One well-validated dev environment is the required deliverable. Two partially wo
 - Production node/AZ/database redundancy, TLS, observability/alerting, restore drills, and defined recovery objectives.
 - Broader quality gates: application tests and coverage policy, SAST, dependency/IaC scanning, SBOM, image signing, and admission policies. The initial image scan is a demonstration, not a complete security program.
 - WAF, External DNS, and additional network/security hardening based on actual requirements.
+- The FUTURE-HARDENING improvements are split into an individually approvable backlog in the infrastructure repository's `docs/hardening.md`.
