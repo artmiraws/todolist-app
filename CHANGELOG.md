@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.2.0](https://github.com/artmiraws/todolist-app/compare/v1.1.0...v1.2.0) (2026-09-20)
+
+
+### Features
+
+* **ci:** read deploy wiring from SSM instead of repo variables ([69b03a2](https://github.com/artmiraws/todolist-app/commit/69b03a219d0b6a4e1e4cabbd14b62e8720a0f83a))
+
 ## [1.1.0](https://github.com/artmiraws/todolist-app/compare/v1.0.0...v1.1.0) (2026-09-20)
 
 
