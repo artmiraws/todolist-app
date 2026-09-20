@@ -174,6 +174,7 @@ One well-validated dev environment is the required deliverable. Two partially wo
 - Optional production-like staging for load/performance, migration, failure/recovery, and release testing.
 - ArgoCD GitOps — **delivered** (ADR-012); Argo Rollouts for progressive delivery and metric-based
   analysis remains a separate optional increment.
+- Move the in-cluster Helm controllers to Argo CD (app-of-apps); Terraform keeps the AWS-managed add-ons, IAM, the bootstrap, and the contract (`GITOPS-ADDONS`).
 - Karpenter and Spot strategies after workload availability and cost measurements justify them.
 - Production node/AZ/database redundancy, TLS, observability/alerting, restore drills, and defined recovery objectives.
 - Broader quality gates: application tests and coverage policy, SAST, dependency/IaC scanning, SBOM, image signing, and admission policies. The initial image scan is a demonstration, not a complete security program.
