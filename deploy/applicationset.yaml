@@ -1,0 +1,58 @@
+# Argo CD ApplicationSet for the TodoList app.
+#
+# The application owns its deployment topology: one Application per environment, generated here and
+# applied by the platform's single Argo CD (app-of-apps). See ADR-014 (trunk-based) and ADR-016.
+#
+# It uses the *cluster* generator, so each Application targets the cluster registered for that
+# environment (the dev cluster is registered with the prod-hosted Argo CD). The cluster secrets carry
+# the API server URL and are labeled `platform/environment: dev|prod` by the platform, so no
+# account-specific values live in this file.
+#
+# Per environment the chart renders from source on main plus that environment's committed digest
+# (gitops/<env>.yaml). Once the chart is published to OCI, prod will pin the released chart version
+# instead of the source (ADR-014) - a one-line change here.
+#
+# The non-secret wiring (repository URL, database host, secret ARNs, hostname, certificate) is
+# injected by the platform at render time (ADR-015), so no account IDs, ARNs, or hostnames are here.
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: todolist
+  namespace: argocd
+spec:
+  goTemplate: true
+  goTemplateOptions: ["missingkey=error"]
+  generators:
+    - clusters:
+        selector:
+          matchLabels:
+            platform/environment: dev
+        values:
+          env: dev
+    - clusters:
+        selector:
+          matchLabels:
+            platform/environment: prod
+        values:
+          env: prod
+  template:
+    metadata:
+      name: "todolist-{{ .values.env }}"
+    spec:
+      project: default
+      source:
+        repoURL: https://github.com/artmiraws/todolist-app
+        targetRevision: main
+        path: charts/todolist
+        helm:
+          valueFiles:
+            - gitops/{{ .values.env }}.yaml
+      destination:
+        server: "{{ .server }}"
+        namespace: todolist
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        syncOptions:
+          - CreateNamespace=true
