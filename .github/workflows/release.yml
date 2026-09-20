@@ -1,0 +1,21 @@
+name: Release
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+# release-please reads Conventional Commits and opens/updates a release PR; merging it tags a
+# version and creates a GitHub Release with a generated changelog. No version file is edited by hand.
+jobs:
+  release-please:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: googleapis/release-please-action@v4
+        with:
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
