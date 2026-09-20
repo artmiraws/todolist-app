@@ -3,9 +3,12 @@ name: Deploy dev
 on:
   push:
     branches: [main]
-    # The digest commit below lands on main; ignore it so the workflow never re-triggers itself.
+    # Ignore commits that carry no application change: the digest commit this workflow makes, and
+    # the release-please merge (version + changelog only), which would otherwise redeploy needlessly.
     paths-ignore:
       - "charts/todolist/gitops/**"
+      - "CHANGELOG.md"
+      - ".release-please-manifest.json"
   workflow_dispatch:
 
 permissions:
