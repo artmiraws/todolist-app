@@ -2,4 +2,4 @@
 # Only the image digest lives here; the rest of the wiring (repository, database, ingress) is
 # injected inline by OpenTofu so no account IDs, ARNs, or hostnames are committed. See ADR-012.
 image:
-  digest: "sha256:9512a7e96bb0d8bb7ffaa64bba73138ee819c03504d95833ee5d328436cfb816"
+  digest: "sha256:f75741ca958ee896a936ed9269dce7829955cb68ed1d476bbe4c1d0cd6e4bbb1"
