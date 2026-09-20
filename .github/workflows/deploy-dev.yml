@@ -11,9 +11,10 @@ on:
 permissions:
   contents: write
 
-# One deploy per environment; avoids concurrent Git updates.
+# Serialize every workflow that commits to the repo (shared group with promote-prod) so the
+# digest pushes never race.
 concurrency:
-  group: deploy-dev
+  group: gitops-write
   cancel-in-progress: false
 
 env:

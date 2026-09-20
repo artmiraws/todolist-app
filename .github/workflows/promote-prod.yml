@@ -15,8 +15,9 @@ on:
 permissions:
   contents: write
 
+# Shared with deploy-dev so only one workflow writes the digest to the repo at a time.
 concurrency:
-  group: promote-prod
+  group: gitops-write
   cancel-in-progress: false
 
 env:
