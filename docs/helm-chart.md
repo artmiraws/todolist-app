@@ -64,8 +64,8 @@ both are set.
 | Image | `todolist-app:local` imported into k3d | ECR image referenced by digest |
 | Secrets directory | `/var/run/secrets/todolist` | Same path, files written by ESO |
 
-See [`aws-access.md`](aws-access.md) for the dev hostname, TLS, and the ALB-vs-Service-LoadBalancer
-choice.
+AWS access (hostname, TLS, and the ALB-vs-Service-LoadBalancer choice) is documented in the platform
+handbook (the `platform-docs` repository).
 
 ## Schema startup and rolling updates
 
