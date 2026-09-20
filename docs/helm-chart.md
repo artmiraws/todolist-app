@@ -52,7 +52,7 @@ both are set.
 | ServiceAccount + Role/RoleBinding | Lets `/pods` and `/cleanup/status` query the Kubernetes API |
 | HorizontalPodAutoscaler | CPU-based scaling (2-6 replicas) |
 | PodDisruptionBudget | `minAvailable: 1` for safe node drains |
-| CronJob | Calls the cleanup endpoint every 5 minutes |
+| CronJob | Calls the cleanup endpoint every 5 minutes; `activeDeadlineSeconds` and `backoffLimit` keep a job that cannot pull its image from blocking later runs under `concurrencyPolicy: Forbid` |
 
 ## Local vs cloud differences
 

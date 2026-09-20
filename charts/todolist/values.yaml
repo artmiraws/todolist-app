@@ -122,6 +122,10 @@ cleanup:
   enabled: true
   schedule: "*/5 * * * *"
   concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 120
+  activeDeadlineSeconds: 120
+  backoffLimit: 2
+  ttlSecondsAfterFinished: 600
   successfulJobsHistoryLimit: 1
   failedJobsHistoryLimit: 1
 

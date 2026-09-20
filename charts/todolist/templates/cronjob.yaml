@@ -8,10 +8,17 @@ metadata:
 spec:
   schedule: {{ .Values.cleanup.schedule | quote }}
   concurrencyPolicy: {{ .Values.cleanup.concurrencyPolicy }}
+  startingDeadlineSeconds: {{ .Values.cleanup.startingDeadlineSeconds }}
   successfulJobsHistoryLimit: {{ .Values.cleanup.successfulJobsHistoryLimit }}
   failedJobsHistoryLimit: {{ .Values.cleanup.failedJobsHistoryLimit }}
   jobTemplate:
     spec:
+      # A job stuck pulling an image (for example, a digest ECR no longer has) must not block
+      # every future run when concurrencyPolicy is Forbid. The deadline terminates it so the next
+      # schedule can proceed.
+      activeDeadlineSeconds: {{ .Values.cleanup.activeDeadlineSeconds }}
+      backoffLimit: {{ .Values.cleanup.backoffLimit }}
+      ttlSecondsAfterFinished: {{ .Values.cleanup.ttlSecondsAfterFinished }}
       template:
         metadata:
           labels:
