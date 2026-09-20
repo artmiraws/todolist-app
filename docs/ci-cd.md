@@ -8,12 +8,12 @@ Two workflows deliver the app. Both run on self-hosted ARC runners inside the ta
 | `deploy-dev.yml` | push to `main` (or manual) | `dev` | build → scan → push by digest → commit the digest |
 | `promote-prod.yml` | published release (or manual) | `prod` (reviewer required) | promote the **same digest** to prod |
 
-Argo CD (installed by the infrastructure repo) is the only owner of the application release: CI never
+Argo CD (installed by the platform repo) is the only owner of the application release: CI never
 runs `helm upgrade`. CI updates the desired image digest in Git and Argo CD reconciles it (ADR-012).
 
 ## Runner
 
-The jobs run on **self-hosted ARC runners** inside the VPC, created by the infrastructure repo:
+The jobs run on **self-hosted ARC runners** inside the VPC, created by the platform repo:
 `arc-runner-set` (dev cluster) and `arc-runner-set-prod` (prod cluster). They reach the private EKS
 APIs and use **IRSA** for ECR push, `eks:DescribeCluster`, and SSM reads.
 
@@ -67,13 +67,13 @@ a GitHub Release with a generated `CHANGELOG.md`.
 ## Ownership
 
 - Argo CD owns the **application release** (from the chart in this repository).
-- The infrastructure repository owns the cluster, add-ons, Argo CD itself, ECR, and the CI runners
+- The platform repository owns the cluster, add-ons, Argo CD itself, ECR, and the CI runners
   (ADR-001, ADR-012).
 - Neither pipeline runs `tofu`.
 
 ## Notes
 
-- Helm charts for cluster add-ons are **vendored** in the infrastructure repo (ADR-004); the app chart
+- Helm charts for cluster add-ons are **vendored** in the platform repo (ADR-004); the app chart
   is in this repository.
 - Dev and prod are torn down between demo windows; the state bucket and snapshots persist. See the
   infrastructure runbook for stale state-lock recovery.

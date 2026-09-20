@@ -74,7 +74,7 @@ ArgoCD provides GitOps reconciliation; progressive canary delivery requires addi
 Layout:
 
 ```text
-infra/
+platform/
 ├── bootstrap/            # S3 remote-state bucket
 ├── modules/
 │   ├── vpc/  eks/  rds/  ecr/
@@ -90,7 +90,7 @@ todolist-app/
 └── .github/workflows/
 ```
 
-`infra/` is the AWS foundation boundary (this repository). Add prod/staging environment roots only when implementing those environments, not as mandatory empty scaffolding.
+`platform/` is the AWS foundation boundary (this repository). Add prod/staging environment roots only when implementing those environments, not as mandatory empty scaffolding.
 
 Use a protected, encrypted remote state backend with locking and a separate bootstrap lifecycle. Keep state out of Git and retain it across dev teardown/recreation. Kubernetes bootstrap/add-ons must have explicit ownership; do not let OpenTofu and Helm/CI manage the same application objects.
 
@@ -113,7 +113,7 @@ Use a protected, encrypted remote state backend with locking and a separate boot
 5. Check for retained snapshots, disks, ECR images, logs, public IPs, and other billable resources. Destroy does not guarantee zero cost.
 6. Recreate the stack, bootstrap add-ons, restore or initialize the database, deploy a known image digest, and repeat smoke tests. Measure this recovery time before relying on it for the presentation.
 
-Apply/destroy commands, backend settings, and the recreation rehearsal live in the infrastructure runbook (`infra/docs/runbook.md`).
+Apply/destroy commands, backend settings, and the recreation rehearsal live in the infrastructure runbook (`platform/docs/runbook.md`).
 
 ## 6. Requirements & Acceptance
 
@@ -178,4 +178,4 @@ One well-validated dev environment is the required deliverable. Two partially wo
 - Production node/AZ/database redundancy, TLS, observability/alerting, restore drills, and defined recovery objectives.
 - Broader quality gates: application tests and coverage policy, SAST, dependency/IaC scanning, SBOM, image signing, and admission policies. The initial image scan is a demonstration, not a complete security program.
 - WAF, External DNS, and additional network/security hardening based on actual requirements.
-- The FUTURE-HARDENING improvements are split into an individually approvable backlog in the infrastructure repository's `docs/hardening.md`.
+- The FUTURE-HARDENING improvements are split into an individually approvable backlog in the platform repository's `docs/hardening.md`.

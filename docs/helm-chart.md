@@ -78,7 +78,7 @@ Deployment uses `maxUnavailable: 0` / `maxSurge: 1` and a PodDisruptionBudget wi
 ## Ownership
 
 This chart owns the application's Kubernetes objects, including the `ExternalSecret`. The
-infrastructure repository owns the External Secrets Operator, its IRSA role, and the
+platform repository owns the External Secrets Operator, its IRSA role, and the
 `ClusterSecretStore` (ADR-001, ADR-010). The two never manage the same object.
 
 ## Deploy
