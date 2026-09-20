@@ -1,6 +1,6 @@
 # DevOps Challenge: TODO List App on Kubernetes
 
-- **Status:** Plan
+- **Status:** Delivered (see the infrastructure runbook and the task tracker)
 - **Goal:** Deliver a reproducible local Kubernetes setup and one cost-conscious AWS EKS environment named `dev`, with automated application deployment.
 - **Timebox:** One week. R0–R5 take priority over additional environments and tooling.
 
@@ -71,16 +71,16 @@ ArgoCD provides GitOps reconciliation; progressive canary delivery requires addi
 
 ## 5. Infrastructure Layout & Lifecycle
 
-Planned layout, not implemented infrastructure:
+Layout:
 
 ```text
 infra/
+├── bootstrap/            # S3 remote-state bucket
 ├── modules/
-│   ├── vpc/
-│   ├── eks/
-│   ├── rds/
-│   ├── secrets/
-│   └── iam/
+│   ├── vpc/  eks/  rds/  ecr/
+│   ├── eso/  alb/  dns/
+│   ├── arc/  infra-runner/                 # self-hosted CI runners
+│   └── app-secrets/  metrics-server/  cluster-autoscaler/
 └── environments/
     └── dev/
 
@@ -90,7 +90,7 @@ todolist-app/
 └── .github/workflows/
 ```
 
-`infra/` describes the logical AWS foundation boundary; final repository placement can be decided independently. Add prod/staging environment roots only when implementing those environments, not as mandatory empty scaffolding.
+`infra/` is the AWS foundation boundary (this repository). Add prod/staging environment roots only when implementing those environments, not as mandatory empty scaffolding.
 
 Use a protected, encrypted remote state backend with locking and a separate bootstrap lifecycle. Keep state out of Git and retain it across dev teardown/recreation. Kubernetes bootstrap/add-ons must have explicit ownership; do not let OpenTofu and Helm/CI manage the same application objects.
 
@@ -113,7 +113,7 @@ Use a protected, encrypted remote state backend with locking and a separate boot
 5. Check for retained snapshots, disks, ECR images, logs, public IPs, and other billable resources. Destroy does not guarantee zero cost.
 6. Recreate the stack, bootstrap add-ons, restore or initialize the database, deploy a known image digest, and repeat smoke tests. Measure this recovery time before relying on it for the presentation.
 
-Exact apply/destroy commands and backend settings belong in the infrastructure runbook once the modules exist; this plan does not claim provisioning has been validated.
+Apply/destroy commands, backend settings, and the recreation rehearsal live in the infrastructure runbook (`infra/docs/runbook.md`).
 
 ## 6. Requirements & Acceptance
 

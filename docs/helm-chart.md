@@ -13,16 +13,17 @@ values, and real cloud identifiers are injected at deploy time instead of being 
 - `values-local.yaml` — **committed**. Local-only, non-sensitive values (`image.tag: local`,
   in-cluster PostgreSQL, Traefik ingress, a dev-only Secret). Safe to share.
 - `values-dev.yaml` — **not committed**. Account ID, ECR repository, secret ARNs, Aurora endpoint,
-  hostname, and ACM ARN. CI generates it (or passes `--set`) from the Terraform outputs, so the
-  repository never contains the account ID and the values cannot drift from the infrastructure.
+  hostname, and ACM ARN. CI generates it from the SSM wiring published by the infrastructure
+  (`/todolist/dev`), so the repository never contains the account ID and the values cannot drift from
+  the infrastructure.
 - `values-dev.example.yaml` — committed template with placeholders.
 - Secret values (DB password, `SESSION_KEY`, admin password, cleanup token) are never in a values
   file. Locally they come from a chart-managed dev-only Secret; in the cloud they are synced by the
   External Secrets Operator from Secrets Manager.
 
 Rationale: committing real environment values would leak the account ID and would drift every time
-dev is torn down and recreated. Deriving them at deploy time from the single source of truth
-(Terraform state/outputs) keeps the repository public-safe and consistent.
+dev is torn down and recreated. Deriving them at deploy time from the single source of truth (the
+infrastructure's SSM outputs) keeps the repository public-safe and consistent.
 
 ## Toggles
 
@@ -62,6 +63,9 @@ both are set.
 | Ingress | Traefik, no hostname | ALB with the documented hostname and ACM |
 | Image | `todolist-app:local` imported into k3d | ECR image referenced by digest |
 | Secrets directory | `/var/run/secrets/todolist` | Same path, files written by ESO |
+
+See [`aws-access.md`](aws-access.md) for the dev hostname, TLS, and the ALB-vs-Service-LoadBalancer
+choice.
 
 ## Schema startup and rolling updates
 
