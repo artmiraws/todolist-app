@@ -77,3 +77,10 @@ a GitHub Release with a generated `CHANGELOG.md`.
   is in this repository.
 - Dev and prod are torn down between demo windows; the state bucket and snapshots persist. See the
   infrastructure runbook for stale state-lock recovery.
+
+## After a teardown
+
+The shared ECR persists across teardown, but its images may not (for example after a force-delete).
+The dev pipeline repopulates it: the next merge to `main` builds and pushes the image, and Argo CD
+reconciles. If a deployment is stuck in `ImagePullBackOff`, run the dev pipeline (or push to `main`)
+to publish a new image.
