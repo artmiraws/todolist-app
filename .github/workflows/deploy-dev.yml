@@ -1,0 +1,143 @@
+name: Deploy dev
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# One deploy per environment; avoids concurrent Helm/EKS changes.
+concurrency:
+  group: deploy-dev
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: us-east-1
+  ECR_REPOSITORY: todolist
+  CLUSTER_NAME: todolist-dev
+  NAMESPACE: todolist
+  RELEASE: todolist
+  HELM_CHART: charts/todolist
+  APP_HOSTNAME: ${{ vars.APP_HOSTNAME }}
+
+jobs:
+  build-and-deploy:
+    # Self-hosted ARC runner in the VPC (registered by the infra repo). Uses IRSA, not GitHub OIDC.
+    runs-on: arc-runner-set
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install tools
+        run: |
+          set -euo pipefail
+          mkdir -p "$HOME/.local/bin"
+          if ! command -v aws >/dev/null 2>&1; then
+            curl -sS "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o /tmp/awscliv2.zip
+            unzip -q /tmp/awscliv2.zip -d /tmp
+            /tmp/aws/install -i "$HOME/.local/aws-cli" -b "$HOME/.local/bin"
+          fi
+          if ! command -v kubectl >/dev/null 2>&1; then
+            curl -sSLO "https://dl.k8s.io/release/v1.36.0/bin/linux/amd64/kubectl"
+            chmod +x kubectl && mv kubectl "$HOME/.local/bin/"
+          fi
+          if ! command -v helm >/dev/null 2>&1; then
+            curl -sS "https://get.helm.sh/helm-v3.19.0-linux-amd64.tar.gz" | tar xz -C /tmp
+            mv /tmp/linux-amd64/helm "$HOME/.local/bin/"
+          fi
+          if ! command -v trivy >/dev/null 2>&1; then
+            curl -sSfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b "$HOME/.local/bin"
+          fi
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Show identity (IRSA)
+        run: aws sts get-caller-identity
+
+      - name: Build image
+        id: build
+        run: |
+          set -euo pipefail
+          ACCOUNT_ID="$(aws sts get-caller-identity --query Account --output text)"
+          REGISTRY="${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
+          echo "registry=${REGISTRY}" >> "$GITHUB_OUTPUT"
+          echo "image=${REGISTRY}/${ECR_REPOSITORY}" >> "$GITHUB_OUTPUT"
+          docker build -t "${REGISTRY}/${ECR_REPOSITORY}:${GITHUB_SHA}" .
+
+      - name: Scan image (fail on CRITICAL)
+        run: |
+          set -euo pipefail
+          trivy image --severity CRITICAL --exit-code 1 --no-progress \
+            --format table --output trivy-report.txt \
+            "${{ steps.build.outputs.image }}:${GITHUB_SHA}"
+
+      - name: Upload scan report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: trivy-report
+          path: trivy-report.txt
+          if-no-files-found: ignore
+
+      - name: Push image
+        id: push
+        run: |
+          set -euo pipefail
+          REGISTRY="${{ steps.build.outputs.registry }}"
+          IMAGE="${{ steps.build.outputs.image }}"
+          aws ecr get-login-password --region "$AWS_REGION" | docker login --username AWS --password-stdin "$REGISTRY"
+          docker push "${IMAGE}:${GITHUB_SHA}" | tee /tmp/push.out
+          DIGEST="$(grep -oE 'sha256:[0-9a-f]{64}' /tmp/push.out | tail -1)"
+          test -n "$DIGEST"
+          echo "digest=${DIGEST}" >> "$GITHUB_OUTPUT"
+          echo "Deployed digest: ${DIGEST}"
+
+      - name: Configure kubectl
+        run: aws eks update-kubeconfig --name "$CLUSTER_NAME" --region "$AWS_REGION"
+
+      - name: Render dev values
+        env:
+          DB_HOST: ${{ vars.DB_HOST }}
+          DB_SECRET_ARN: ${{ vars.DB_SECRET_ARN }}
+          APP_SECRET_ARN: ${{ vars.APP_SECRET_ARN }}
+          CERT_ARN: ${{ vars.INGRESS_CERT_ARN }}
+        run: |
+          set -euo pipefail
+          cat > /tmp/values-dev.yaml <<EOF
+          image:
+            repository: ${{ steps.build.outputs.image }}
+            digest: "${{ steps.push.outputs.digest }}"
+          config:
+            dbHost: "${DB_HOST}"
+          externalSecret:
+            dbSecretArn: "${DB_SECRET_ARN}"
+            appSecretArn: "${APP_SECRET_ARN}"
+          ingress:
+            host: "${APP_HOSTNAME}"
+            annotations:
+              alb.ingress.kubernetes.io/scheme: internet-facing
+              alb.ingress.kubernetes.io/target-type: ip
+              alb.ingress.kubernetes.io/listen-ports: '[{"HTTPS":443}]'
+              alb.ingress.kubernetes.io/ssl-redirect: "443"
+              alb.ingress.kubernetes.io/certificate-arn: "${CERT_ARN}"
+          EOF
+          cat /tmp/values-dev.yaml
+
+      - name: Deploy (Helm)
+        run: |
+          helm upgrade --install "$RELEASE" "$HELM_CHART" \
+            --namespace "$NAMESPACE" --create-namespace \
+            -f /tmp/values-dev.yaml \
+            --wait --timeout 5m
+
+      - name: Smoke test
+        run: |
+          set -euo pipefail
+          for i in $(seq 1 20); do
+            if curl -fsS --max-time 15 "https://${APP_HOSTNAME}/healthz"; then
+              echo; echo "Smoke test passed"; exit 0
+            fi
+            echo "waiting for ${APP_HOSTNAME}... ($i)"
+            sleep 15
+          done
+          echo "Smoke test failed"; exit 1
