@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.4.0](https://github.com/artmiraws/todolist-app/compare/v1.3.0...v1.4.0) (2026-09-20)
+
+
+### Features
+
+* **app:** add a /version endpoint reporting the running version and image ([fb50105](https://github.com/artmiraws/todolist-app/commit/fb501051c542df9affb690970b287c3bd4464a0b))
+
 ## [1.3.0](https://github.com/artmiraws/todolist-app/compare/v1.2.0...v1.3.0) (2026-09-20)
 
 
