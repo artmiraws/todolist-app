@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.5.0](https://github.com/artmiraws/todolist-app/compare/v1.4.0...v1.5.0) (2026-09-20)
+
+
+### Features
+
+* **app:** add an ApplicationSet generating one Application per environment ([9499c64](https://github.com/artmiraws/todolist-app/commit/9499c64efda0280c67c3f73f9f3abe8bbc2e98de))
+
 ## [1.4.0](https://github.com/artmiraws/todolist-app/compare/v1.3.0...v1.4.0) (2026-09-20)
 
 
