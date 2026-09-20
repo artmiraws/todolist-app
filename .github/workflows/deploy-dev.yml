@@ -20,12 +20,15 @@ env:
   NAMESPACE: todolist
   RELEASE: todolist
   HELM_CHART: charts/todolist
-  APP_HOSTNAME: ${{ vars.APP_HOSTNAME }}
 
 jobs:
   build-and-deploy:
     # Self-hosted ARC runner in the VPC (registered by the infra repo). Uses IRSA, not GitHub OIDC.
     runs-on: arc-runner-set
+    # Variables are scoped to the `dev` GitHub Environment; declaring it makes vars.* resolve.
+    environment: dev
+    env:
+      APP_HOSTNAME: ${{ vars.APP_HOSTNAME }}
     steps:
       - uses: actions/checkout@v4
 
