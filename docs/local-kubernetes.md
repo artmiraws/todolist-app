@@ -1,89 +1,88 @@
-# Rodando a aplicação em Kubernetes local
+# Running the app on local Kubernetes
 
-Guia completo para rodar a aplicação TodoList em um cluster Kubernetes local,
-do zero — sem experiência prévia com Kubernetes.
+A complete guide to running the TodoList app on a local Kubernetes cluster, from scratch — no prior
+Kubernetes experience needed.
 
 ---
 
-## 1. O que você vai precisar
+## 1. What you need
 
-| Ferramenta | O que é | Por que precisa |
+| Tool | What it is | Why you need it |
 |---|---|---|
-| **Git** | Sistema de controle de versão | Clonar este repositório |
-| **Docker** | Plataforma para rodar aplicações em contêineres | O cluster k8s e a aplicação rodam como contêineres |
-| **k3d** | Kubernetes leve rodando dentro do Docker | Cria um cluster k8s local sem instalar nada no sistema |
-| **kubectl** | CLI para conversar com o cluster k8s | Gerencia os recursos (deploy, pods, serviços) dentro do cluster |
-| **make** | Ferramenta de automação | Executa os comandos do `Makefile` (`make up`, `make down`, etc.) |
+| **Git** | Version control | Clone this repository |
+| **Docker** | Container platform | The k8s cluster and the app run as containers |
+| **k3d** | Lightweight Kubernetes in Docker | Creates a local k8s cluster without installing anything on the host |
+| **kubectl** | CLI to talk to the k8s cluster | Manages resources (deployments, pods, services) |
+| **make** | Automation tool | Runs the `Makefile` commands (`make up`, `make down`, etc.) |
 
-> As instruções foram validadas em Linux (Ubuntu). Os passos para macOS e Windows
-> estão incluídos como referência, mas não foram testados.
+> Instructions were validated on Linux (Ubuntu). macOS and Windows steps are included for reference
+> but were not tested.
 
 ---
 
-## 2. Instalando as ferramentas
+## 2. Installing the tools
 
 ### 2.1. Docker
 
-O Docker é a base de tudo. Sem ele, nada funciona.
+Docker is the foundation; nothing works without it.
 
 **Linux (Ubuntu/Debian):**
 ```bash
-# Instalar Docker
+# Install Docker
 curl -fsSL https://get.docker.com | sh
 
-# Adicionar seu usuário ao grupo docker (para não precisar de sudo)
+# Add your user to the docker group (so you don't need sudo)
 sudo usermod -aG docker $USER
 
-# Sair e entrar novamente no terminal para o grupo ter efeito
+# Log out and back in for the group change to take effect
 ```
 
 **macOS:**
-- Baixe o [Docker Desktop](https://www.docker.com/products/docker-desktop/) e instale normalmente.
+- Download and install [Docker Desktop](https://www.docker.com/products/docker-desktop/).
 
 **Windows:**
-- Baixe o [Docker Desktop](https://www.docker.com/products/docker-desktop/) e instale.
-- Ative o WSL2 quando solicitado durante a instalação.
+- Download and install [Docker Desktop](https://www.docker.com/products/docker-desktop/).
+- Enable WSL2 when prompted during installation.
 
-**Verificar se funciona:**
+**Verify:**
 ```bash
 docker --version
 docker run --rm hello-world
 ```
 
-Se o segundo comando mostrar "Hello from Docker!", está tudo certo.
+If the second command prints "Hello from Docker!", you're good.
 
 ---
 
 ### 2.2. k3d
 
-O k3d cria um cluster Kubernetes completo (k3s) dentro de um contêiner Docker —
-não instala nada fora do Docker, não precisa de root, e pode ser criado/destruído
-em segundos.
+k3d runs a full Kubernetes cluster (k3s) inside a Docker container — it installs nothing outside
+Docker, needs no root, and can be created/destroyed in seconds.
 
-**Linux e macOS:**
+**Linux and macOS:**
 ```bash
 curl -sSL https://raw.githubusercontent.com/k3d-io/k3d/main/install.sh | TAG=v5.8.3 bash
 ```
 
-> Se o comando acima pedir senha (sudo), significa que o script não conseguiu
-> instalar em `/usr/local/bin`. Nesse caso, baixe o binário manualmente:
+> If the command asks for a password (sudo), the script could not write to `/usr/local/bin`.
+> In that case, download the binary manually:
 > ```bash
 > mkdir -p ~/.local/bin
 > curl -sSL -o ~/.local/bin/k3d https://github.com/k3d-io/k3d/releases/download/v5.8.3/k3d-linux-amd64
 > chmod +x ~/.local/bin/k3d
-> # Adicione ~/.local/bin ao PATH se ainda não estiver:
+> # Add ~/.local/bin to PATH if it isn't already:
 > echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
 > source ~/.bashrc
 > ```
-> No macOS, substitua `k3d-linux-amd64` por `k3d-darwin-amd64`.
+> On macOS, replace `k3d-linux-amd64` with `k3d-darwin-amd64`.
 
 **Windows:**
 ```powershell
-# No PowerShell (como administrador):
+# In PowerShell (as administrator):
 curl -sSL -o ~/.local/bin/k3d.exe https://github.com/k3d-io/k3d/releases/download/v5.8.3/k3d-windows-amd64.exe
 ```
 
-**Verificar:**
+**Verify:**
 ```bash
 k3d version
 ```
@@ -92,11 +91,10 @@ k3d version
 
 ### 2.3. kubectl
 
-O k3d **não** instala o `kubectl` na sua máquina. O binário existe dentro do
-contêiner do k3s, mas para gerenciar o cluster a partir do host é preciso
-instalar o `kubectl` separadamente:
+k3d does **not** install `kubectl` on your machine. The binary exists inside the k3s container, but
+to manage the cluster from the host you must install `kubectl` separately:
 
-**Linux e macOS:**
+**Linux and macOS:**
 ```bash
 curl -sLO "https://dl.k8s.io/release/$(curl -sL https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
 chmod +x kubectl
@@ -109,17 +107,16 @@ curl -sLO "https://dl.k8s.io/release/v1.31.0/bin/windows/amd64/kubectl.exe"
 Move-Item kubectl.exe ~/.local/bin/kubectl.exe
 ```
 
-**Verificar:**
+**Verify:**
 ```bash
 kubectl version --client
 ```
 
 ---
 
-### 2.4. Git e make
+### 2.4. Git and make
 
-O Git é necessário para clonar o repositório e o `make` para executar os comandos
-do `Makefile`.
+Git is needed to clone the repository and `make` to run the `Makefile` commands.
 
 **Linux (Ubuntu/Debian):**
 ```bash
@@ -129,13 +126,13 @@ sudo apt-get install -y git make
 
 **macOS:**
 ```bash
-# O make faz parte das Command Line Tools do Xcode:
+# make ships with the Xcode Command Line Tools:
 xcode-select --install
-# O Git normalmente já vem instalado; caso contrário:
+# Git is usually already installed; otherwise:
 brew install git
 ```
 
-**Verificar:**
+**Verify:**
 ```bash
 git --version
 make --version
@@ -143,194 +140,188 @@ make --version
 
 ---
 
-## 3. Rodando a aplicação
+## 3. Running the app
 
-### 3.1. Tudo de uma vez (Makefile)
+### 3.1. All at once (Makefile)
 
-O repositório inclui um `Makefile` que automatiza todo o processo.
-Execute **um único comando** para criar o cluster, buildar a imagem e
-fazer o deploy:
+The repository includes a `Makefile` that automates the whole process. Run a **single command** to
+create the cluster, build the image, and deploy:
 
 ```bash
 make up
 ```
 
-Esse comando vai:
-1. Criar um cluster k3d local (se não existir)
-2. Buildar a imagem Docker da aplicação
-3. Importar a imagem para dentro do cluster
-4. Fazer o deploy do chart Helm (aplicação, banco local, RBAC, etc.)
-5. Aguardar os pods ficarem prontos
+That command will:
+1. Create a local k3d cluster (if it doesn't exist)
+2. Build the app's Docker image
+3. Import the image into the cluster
+4. Deploy the Helm chart (app, local database, RBAC, etc.)
+5. Wait for the pods to become ready
 
-Depois, acesse: **http://localhost:8080**
-(usuário: `admin` / senha: `admin`)
+Then open: **http://localhost:8080** (user: `admin` / password: `admin`)
 
-O deploy usa o chart em `charts/todolist` com os valores de
-`charts/todolist/values-local.yaml` (PostgreSQL no cluster e um Secret local). Na AWS, o mesmo
-chart usa Aurora e o External Secrets Operator; veja [`helm-chart.md`](helm-chart.md).
+The deploy uses the chart in `charts/todolist` with the values in
+`charts/todolist/values-local.yaml` (PostgreSQL in the cluster and a local Secret). On AWS, the same
+chart uses Aurora and the External Secrets Operator; see [`helm-chart.md`](helm-chart.md).
 
 ---
 
-### 3.2. Passo a passo manual
+### 3.2. Manual step by step
 
-Se preferir entender cada etapa:
+If you prefer to understand each step:
 
 ```bash
-# 1. Criar o cluster k3s dentro do Docker
-#    --agents 1 = 1 node worker extra (além do server)
-#    --port 8080:80 = mapeia a porta 80 do Traefik (ingress) para 8080 na sua máquina
+# 1. Create the k3s cluster inside Docker
+#    --agents 1 = 1 extra worker node (besides the server)
+#    --port 8080:80 = map Traefik's port 80 (ingress) to 8080 on your machine
 k3d cluster create todolist --agents 1 --port "8080:80@loadbalancer"
 
-# 2. Buildar a imagem Docker da aplicação (multi-stage Dockerfile)
+# 2. Build the app's Docker image (multi-stage Dockerfile)
 docker build -t todolist-app:local .
 
-# 3. Importar a imagem para dentro do cluster
-#    (sem isso, os nodes k3d não conseguem puxar a imagem)
+# 3. Import the image into the cluster
+#    (without this, the k3d nodes can't pull the image)
 k3d image import todolist-app:local -c todolist
 
-# 4. Fazer o deploy do chart Helm (usa charts/todolist/values-local.yaml)
+# 4. Deploy the Helm chart (uses charts/todolist/values-local.yaml)
 helm upgrade --install todolist charts/todolist \
   --namespace todolist --create-namespace \
   -f charts/todolist/values-local.yaml
 
-# 5. Aguardar o PostgreSQL ficar pronto
+# 5. Wait for PostgreSQL to be ready
 kubectl -n todolist rollout status deploy/todolist-postgres
 
-# 6. Aguardar a aplicação ficar pronta
+# 6. Wait for the app to be ready
 kubectl -n todolist rollout status deploy/todolist
 
-# 7. Acessar no navegador
+# 7. Open in the browser
 #    http://localhost:8080
 ```
 
 ---
 
-## 4. Comandos úteis do Makefile
+## 4. Useful Makefile commands
 
-| Comando | O que faz |
+| Command | What it does |
 |---|---|
-| `make up` | Cria cluster + build + import + deploy (tudo de uma vez) |
-| `make down` | Remove a release Helm e o namespace (sem destruir o cluster) |
-| `make destroy` | Destrói o cluster completamente |
-| `make clean` | Remove recursos + destrói o cluster (ambiente limpo) |
-| `make build` | Apenas builda a imagem Docker |
-| `make import` | Apenas importa a imagem para o cluster |
-| `make status` | Mostra o estado dos pods e deploys |
-| `make logs` | Mostra os logs da aplicação em tempo real |
-| `make health` | Testa o endpoint de health da aplicação (falha se a resposta não for HTTP 2xx) |
-| `make pf` | Port-forward como alternativa ao ingress (acesso via `localhost:5000`) |
-| `make restart` | Reinicia o Deployment da aplicação (para pegar uma imagem reconstruída) |
+| `make up` | Create cluster + build + import + deploy (all at once) |
+| `make down` | Remove the Helm release and namespace (keeps the cluster) |
+| `make destroy` | Destroy the cluster completely |
+| `make clean` | Remove resources + destroy the cluster (clean environment) |
+| `make build` | Build the Docker image only |
+| `make import` | Import the image into the cluster only |
+| `make status` | Show pod and deployment status |
+| `make logs` | Stream the app logs |
+| `make health` | Test the app health endpoint (fails on a non-2xx response) |
+| `make pf` | Port-forward as an alternative to the ingress (`localhost:5000`) |
+| `make restart` | Restart the app Deployment (to pick up a rebuilt image) |
 
-Os comandos que usam `kubectl` verificam se o contexto atual é `k3d-todolist`
-(`k3d-<nome-do-cluster>`) antes de executar, para não alterar outro cluster por
-engano. Para trocar manualmente: `kubectl config use-context k3d-todolist`.
+Commands that use `kubectl` check that the current context is `k3d-todolist`
+(`k3d-<cluster-name>`) before running, so they don't touch another cluster by mistake. To switch
+manually: `kubectl config use-context k3d-todolist`.
 
-Como a imagem local usa a tag fixa `todolist-app:local`, reconstruir a imagem e
-rodar `make up` de novo não reinicia os pods (a tag não mudou). Depois de
-`make build && make import`, rode `make restart` para o Deployment pegar a nova
-imagem.
+Because the local image uses the fixed tag `todolist-app:local`, rebuilding the image and running
+`make up` again does not restart the pods (the tag didn't change). After
+`make build && make import`, run `make restart` so the Deployment picks up the new image.
 
 ---
 
-## 5. Sobre a aplicação
+## 5. About the app
 
 ### Login
 
-- **Usuário:** `admin`
-- **Senha:** `admin`
-- Valores definidos no Secret local gerado pelo chart (`charts/todolist/values-local.yaml`). Não
-  são seguros para produção.
+- **User:** `admin`
+- **Password:** `admin`
+- Values are defined in the local Secret generated by the chart
+  (`charts/todolist/values-local.yaml`). They are not safe for production.
 
-### Funcionalidades
+### Features
 
-| Rota | O que faz |
+| Route | What it does |
 |---|---|
-| `/` | Lista de tarefas (precisa estar logado) |
-| `/add` | Adiciona uma tarefa |
-| `/toggle/<id>` | Marca/desmarca uma tarefa como concluída |
-| `/delete/<id>` | Remove uma tarefa |
-| `/pods` | Lista os pods do namespace (requer RBAC — já configurado) |
-| `/cleanup` | Remove tarefas concluídas (requer token no header `X-Cleanup-Token`) |
-| `/cleanup/status` | Histórico das execuções de limpeza + pausar/retomar o CronJob |
-| `/healthz` | Health check (retorna `ok` se o banco estiver acessível) |
+| `/` | Task list (requires login) |
+| `/add` | Add a task |
+| `/toggle/<id>` | Mark/unmark a task as done |
+| `/delete/<id>` | Delete a task |
+| `/pods` | List the namespace pods (requires RBAC — already configured) |
+| `/cleanup` | Remove completed tasks (requires the `X-Cleanup-Token` header) |
+| `/cleanup/status` | Cleanup run history + pause/resume the CronJob |
+| `/healthz` | Health check (returns `ok` when the database is reachable) |
 
-### Variáveis de ambiente
+### Environment variables
 
-A aplicação lê configuração de dois lugares, nesta ordem:
-1. **Arquivos** em `/var/run/secrets/todolist/` (montados como volume k8s Secret)
-2. **Variáveis de ambiente** (fallback)
+The app reads configuration from two places, in this order:
+1. **Files** under `/var/run/secrets/todolist/` (mounted from a Kubernetes Secret)
+2. **Environment variables** (fallback)
 
-Isso significa que, no cluster, as credenciais ficam no objeto Secret do Kubernetes,
-não expostas em variáveis de ambiente dos pods.
+So in the cluster, credentials live in the Kubernetes Secret object, not exposed in pod environment
+variables.
 
-### Sessões
+### Sessions
 
-A aplicação usa **sessões Flask**, armazenadas em um cookie assinado com HMAC no
-navegador — não na memória do pod. A chave que assina o cookie (`SESSION_KEY`) é
-definida no Secret local do chart (`charts/todolist/values-local.yaml`). Como o cookie é do lado do cliente, o login
-sobrevive a reinícios dos pods enquanto a `SESSION_KEY` não mudar; trocar a chave
-invalida as sessões existentes.
+The app uses **Flask sessions**, stored in a client-side cookie signed with HMAC — not in pod
+memory. The key that signs the cookie (`SESSION_KEY`) is defined in the chart's local Secret
+(`charts/todolist/values-local.yaml`). Because the cookie is client-side, login survives pod
+restarts as long as `SESSION_KEY` doesn't change; changing the key invalidates existing sessions.
 
-### Banco de dados
+### Database
 
-- PostgreSQL 16 (Alpine) rodando como Deployment no namespace `todolist`
-- Dados persistidos em um PersistentVolumeClaim (`todolist-postgres-data`, 500Mi)
-- O schema é criado automaticamente pela aplicação na inicialização (`db.create_all()`)
+- PostgreSQL 16 (Alpine) running as a Deployment in the `todolist` namespace
+- Data persisted on a PersistentVolumeClaim (`todolist-postgres-data`, 500Mi)
+- The schema is created automatically by the app on startup (`db.create_all()`)
 
-### CronJob de limpeza
+### Cleanup CronJob
 
-Um CronJob (`cleanup`) roda a cada 5 minutos e chama o endpoint `POST /cleanup`
-para remover tarefas concluídas. O histórico pode ser visto em `/cleanup/status`,
-onde é possível pausar e retomar o agendamento.
+A CronJob (`cleanup`) runs every 5 minutes and calls `POST /cleanup` to remove completed tasks. The
+history is visible at `/cleanup/status`, where you can pause and resume the schedule.
 
 ---
 
-## 6. Solução de problemas
+## 6. Troubleshooting
 
-### O pod da aplicação não fica pronto (CrashLoopBackOff)
+### The app pod never becomes ready (CrashLoopBackOff)
 
-**Causa mais comum:** o PostgreSQL ainda não está pronto.
+**Most common cause:** PostgreSQL isn't ready yet.
 ```bash
-# Verificar status do PostgreSQL
+# Check PostgreSQL status
 kubectl -n todolist get pods
 kubectl -n todolist logs deploy/todolist-postgres
 
-# Verificar logs da aplicação
+# Check the app logs
 kubectl -n todolist logs -l app.kubernetes.io/component=app --tail=20
 ```
 
-Espere até que o pod do PostgreSQL mostre `1/1 Running` antes de investigar
-problemas na aplicação.
+Wait until the PostgreSQL pod shows `1/1 Running` before investigating the app.
 
-### Não consigo acessar http://localhost:8080
+### I can't reach http://localhost:8080
 
 ```bash
-# Verificar se o ingress está configurado
+# Check the ingress
 kubectl -n todolist get ingress
 
-# Verificar se o Traefik está rodando
+# Check that Traefik is running
 kubectl -n kube-system get pods | grep traefik
 
-# Testar com curl (o ingress não restringe hostname, então não é preciso header Host)
+# Test with curl (the ingress does not restrict the hostname, so no Host header is needed)
 curl -fsS http://localhost:8080/healthz
 ```
 
-Se o ingress estiver OK mas o browser não acessa, tente:
-- Abrir `http://localhost:8080/login` diretamente
-- Verificar se outro processo não está usando a porta 8080
+If the ingress is OK but the browser can't connect, try:
+- Opening `http://localhost:8080/login` directly
+- Checking that nothing else is using port 8080
 
-### A página /pods mostra "Unable to query the Kubernetes API"
+### The /pods page shows "Unable to query the Kubernetes API"
 
-O ServiceAccount não tem permissões. Verifique:
+The ServiceAccount lacks permissions. Check:
 ```bash
 kubectl -n todolist get rolebinding todolist -o yaml
 kubectl -n todolist get sa todolist -o yaml
 ```
 
-### HPA não funciona (FailedComputeMetricsReplicas)
+### HPA doesn't work (FailedComputeMetricsReplicas)
 
-O `metrics-server` precisa de tempo para coletar métricas. Em cluster local
-com pouca carga, pode levar alguns minutos. Verifique:
+`metrics-server` needs time to collect metrics. On a local cluster with little load this can take a
+few minutes. Check:
 ```bash
 kubectl top nodes
 kubectl -n todolist get hpa
@@ -338,25 +329,25 @@ kubectl -n todolist get hpa
 
 ---
 
-## 7. Estrutura dos arquivos
+## 7. File structure
 
 ```
 todolist-app/
-├── Dockerfile          # Build multi-stage (builder + runtime)
-├── .dockerignore       # Arquivos ignorados no build
-├── app.py              # Código da aplicação Flask
-├── requirements.txt    # Dependências Python
-├── Makefile            # Comandos de automação
-├── README.md           # Documentação geral
+├── Dockerfile          # Multi-stage build (builder + runtime)
+├── .dockerignore       # Files excluded from the build
+├── app.py              # Flask app code
+├── requirements.txt    # Python dependencies
+├── Makefile            # Automation commands
+├── README.md           # General documentation
 ├── charts/
 │   └── todolist/
 │       ├── Chart.yaml
-│       ├── values.yaml             # Padrões e estrutura (todos os ambientes)
-│       ├── values-local.yaml       # Valores locais (PostgreSQL no cluster, Secret local)
-│       ├── values-dev.example.yaml # Exemplo para o dev na AWS
+│       ├── values.yaml             # Defaults and structure (all environments)
+│       ├── values-local.yaml       # Local values (in-cluster PostgreSQL, local Secret)
+│       ├── values-dev.example.yaml # Example for AWS dev
 │       └── templates/              # Deployment, Service, Ingress, ExternalSecret, etc.
 └── docs/
-    ├── local-kubernetes.md   # Este guia
-    ├── helm-chart.md         # Chart, valores e diferenças local/cloud
-    └── PLAN.md               # Plano do desafio DevOps
+    ├── local-kubernetes.md   # This guide
+    ├── helm-chart.md         # Chart, values, and local/cloud differences
+    └── PLAN.md               # DevOps challenge plan
 ```
