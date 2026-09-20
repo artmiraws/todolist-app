@@ -169,9 +169,11 @@ One well-validated dev environment is the required deliverable. Two partially wo
 
 ## 10. Future Work
 
-- Separate prod cluster and approved dev → prod promotion, if not delivered within the timebox.
+- Separate prod cluster and approved dev → prod promotion — **delivered** (ADR-011); production-grade
+  capacity/redundancy remains future work.
 - Optional production-like staging for load/performance, migration, failure/recovery, and release testing.
-- ArgoCD GitOps; Argo Rollouts for progressive delivery and metric-based analysis.
+- ArgoCD GitOps — **delivered** (ADR-012); Argo Rollouts for progressive delivery and metric-based
+  analysis remains a separate optional increment.
 - Karpenter and Spot strategies after workload availability and cost measurements justify them.
 - Production node/AZ/database redundancy, TLS, observability/alerting, restore drills, and defined recovery objectives.
 - Broader quality gates: application tests and coverage policy, SAST, dependency/IaC scanning, SBOM, image signing, and admission policies. The initial image scan is a demonstration, not a complete security program.
