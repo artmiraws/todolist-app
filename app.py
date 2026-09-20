@@ -1,6 +1,6 @@
 # ABOUTME: Flask todolist app with PostgreSQL backend, session-based authentication,
 # ABOUTME: and a /pods route that queries the Kubernetes API via ServiceAccount.
-from flask import Flask, request, redirect, render_template_string, session
+from flask import Flask, request, redirect, render_template_string, session, jsonify
 from flask_sqlalchemy import SQLAlchemy
 from functools import wraps
 from urllib.parse import quote_plus
@@ -45,6 +45,7 @@ db = SQLAlchemy(app)
 ADMIN_USER      = _config('ADMIN_USER', 'admin')
 ADMIN_PASSWORD  = _config('ADMIN_PASSWORD', 'admin')
 CLEANUP_TOKEN   = _config('CLEANUP_TOKEN', '')
+APP_VERSION     = os.environ.get('APP_VERSION', 'dev')
 
 COLORS = {
     'purple': ('#7c3aed', '#6d28d9'),
@@ -932,6 +933,19 @@ def delete(todo_id):
     db.session.delete(todo)
     db.session.commit()
     return redirect('/')
+
+@app.route('/version')
+def version():
+    """Reports the running version and the exact image, for smoke tests and debugging."""
+    image = 'unknown'
+    try:
+        namespace = _k8s_namespace()
+        pod = _k8s_get(
+            f'/api/v1/namespaces/{namespace}/pods/{os.environ.get("HOSTNAME", "")}').json()
+        image = pod['spec']['containers'][0]['image']
+    except Exception:
+        app.logger.exception('failed to read the running image from the Kubernetes API')
+    return jsonify(version=APP_VERSION, image=image)
 
 @app.route('/healthz')
 def health():

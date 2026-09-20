@@ -6,6 +6,7 @@ metadata:
     {{- include "todolist.labels" . | nindent 4 }}
 data:
   APP_NAME: {{ .Values.config.appName | quote }}
+  APP_VERSION: {{ .Chart.AppVersion | quote }}
   APP_PORT: {{ .Values.config.appPort | quote }}
   APP_COLOR: {{ .Values.config.appColor | quote }}
   DB_HOST: {{ if .Values.postgresql.enabled }}{{ include "todolist.postgresServiceName" . | quote }}{{ else }}{{ .Values.config.dbHost | quote }}{{ end }}
