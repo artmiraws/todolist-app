@@ -25,10 +25,8 @@ jobs:
   build-and-deploy:
     # Self-hosted ARC runner in the VPC (registered by the infra repo). Uses IRSA, not GitHub OIDC.
     runs-on: arc-runner-set
-    # Variables are scoped to the `dev` GitHub Environment; declaring it makes vars.* resolve.
+    # Deployment tracking only; wiring is read from SSM Parameter Store (/todolist/dev), not repo variables.
     environment: dev
-    env:
-      APP_HOSTNAME: ${{ vars.APP_HOSTNAME }}
     steps:
       - uses: actions/checkout@v7
 
@@ -99,13 +97,15 @@ jobs:
         run: aws eks update-kubeconfig --name "$CLUSTER_NAME" --region "$AWS_REGION"
 
       - name: Render dev values
-        env:
-          DB_HOST: ${{ vars.DB_HOST }}
-          DB_SECRET_ARN: ${{ vars.DB_SECRET_ARN }}
-          APP_SECRET_ARN: ${{ vars.APP_SECRET_ARN }}
-          CERT_ARN: ${{ vars.INGRESS_CERT_ARN }}
         run: |
           set -euo pipefail
+          ssm() { aws ssm get-parameter --name "/todolist/dev/$1" --query Parameter.Value --output text; }
+          APP_HOSTNAME="$(ssm app_hostname)"
+          DB_HOST="$(ssm db_host)"
+          DB_SECRET_ARN="$(ssm db_secret_arn)"
+          APP_SECRET_ARN="$(ssm app_secret_arn)"
+          CERT_ARN="$(ssm ingress_certificate_arn)"
+          echo "APP_HOSTNAME=${APP_HOSTNAME}" >> "$GITHUB_ENV"
           cat > /tmp/values-dev.yaml <<EOF
           image:
             repository: ${{ steps.build.outputs.image }}
