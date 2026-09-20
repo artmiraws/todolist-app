@@ -24,11 +24,16 @@ Kubernetes experience needed.
 
 ### 2.1. Docker
 
-Docker is the foundation; nothing works without it.
+Docker is the foundation; nothing works without it. `k3d` works with any Docker-compatible runtime.
+
+> **Licensing:** Docker Engine (Linux) is free and open source. **Docker Desktop** is free for
+> personal use and small businesses, but requires a paid subscription for larger companies (more
+> than 250 employees, or more than US$10M in annual revenue). On macOS/Windows, if that applies, use
+> an open-source alternative such as **Colima** or **Rancher Desktop**.
 
 **Linux (Ubuntu/Debian):**
 ```bash
-# Install Docker
+# Install Docker Engine
 curl -fsSL https://get.docker.com | sh
 
 # Add your user to the docker group (so you don't need sudo)
@@ -38,10 +43,12 @@ sudo usermod -aG docker $USER
 ```
 
 **macOS:**
-- Download and install [Docker Desktop](https://www.docker.com/products/docker-desktop/).
+- [Docker Desktop](https://www.docker.com/products/docker-desktop/) (see the licensing note above), or
+- Colima (open source): `brew install colima docker && colima start`
 
 **Windows:**
-- Download and install [Docker Desktop](https://www.docker.com/products/docker-desktop/).
+- [Docker Desktop](https://www.docker.com/products/docker-desktop/) (see the licensing note above), or
+- Rancher Desktop (open source).
 - Enable WSL2 when prompted during installation.
 
 **Verify:**
