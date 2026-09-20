@@ -1,9 +1,10 @@
 name: Promote prod
 
 on:
-  # Production deploys on a published release, never on a push to main.
-  release:
-    types: [published]
+  # Called by the release workflow when it creates a release. A GitHub Release created with
+  # GITHUB_TOKEN does not emit a `release` event that can trigger another workflow, so the promotion
+  # is chained from release.yml rather than triggered by `on: release`.
+  workflow_call:
   workflow_dispatch:
     inputs:
       digest:

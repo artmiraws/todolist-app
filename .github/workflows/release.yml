@@ -14,8 +14,19 @@ permissions:
 jobs:
   release-please:
     runs-on: ubuntu-latest
+    outputs:
+      release_created: ${{ steps.release.outputs.release_created }}
     steps:
-      - uses: googleapis/release-please-action@v5
+      - id: release
+        uses: googleapis/release-please-action@v5
         with:
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
+
+  # Promote the released, dev-validated digest to prod. Chained here because a release created with
+  # GITHUB_TOKEN cannot trigger a separate `on: release` workflow.
+  promote:
+    needs: release-please
+    if: needs.release-please.outputs.release_created == 'true'
+    uses: ./.github/workflows/promote-prod.yml
+    secrets: inherit
