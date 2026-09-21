@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.5.1](https://github.com/artmiraws/todolist-app/compare/v1.5.0...v1.5.1) (2026-09-21)
+
+
+### Bug Fixes
+
+* **chart:** stop a stuck cleanup job from blocking future runs ([5296310](https://github.com/artmiraws/todolist-app/commit/5296310f9bd91650c6c10f7d11ca15b5d973fa48))
+
 ## [1.5.0](https://github.com/artmiraws/todolist-app/compare/v1.4.0...v1.5.0) (2026-09-20)
 
 
