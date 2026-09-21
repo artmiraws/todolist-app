@@ -1,0 +1,674 @@
+---
+id: PLAN
+in: [TASKS.yaml, PLAN.md]
+out: [PLAN.md, todolist-app/docs/PLAN.md, todolist-app/docs/TASKS.yaml]
+status: done
+path: .
+ignore-paths: [platform/]
+system: TODO List
+description: DevOps challenge for a Flask/PostgreSQL TODO List application.
+context:
+  timebox: One week; R0-R5 take priority over optional environments and tools.
+  environments: Local k3s in k3d and one cost-conscious AWS EKS cluster named dev.
+  delivery: GitHub Actions builds from source and deploys dev; no local-to-dev promotion.
+  infrastructure: OpenTofu; confirm repository placement before implementation.
+  requirements:
+    R0: Run locally on Kubernetes with a multi-stage Dockerfile.
+    R1: Provision the cloud cluster and dependencies as code.
+    R2: Automate application deployment.
+    R3: Access the application through a browser.
+    R4: Demonstrate scalability and resilience, documenting dev limitations.
+    R5: Provide setup, operational documentation, and decision records.
+  execution:
+    - Entries are YAML documents with stable IDs, inputs, outputs, and statuses.
+    - Work on open tasks only when their dependencies are done.
+    - Deferred tasks require explicit scope approval; do not execute them automatically.
+    - Statuses are open, in_progress, blocked, done, and deferred.
+    - Mark done only after verification; record evidence and unresolved blockers.
+    - Confirm AWS account, region, budget, and destructive actions before execution.
+    - Do not commit or push unless explicitly requested.
+task: Create and maintain the delivery plan, decisions, and requirement-aligned epics.
+verification:
+  - Initial plan delivered and aligned with one EKS dev and optional prod/staging.
+---
+id: LOCAL-DEPLOY
+epic: EPIC-1
+requirements: [R0]
+in: [PLAN.md, todolist-app/]
+out: [todolist-app/Dockerfile, todolist-app/.dockerignore, todolist-app/k8s/, todolist-app/README.md]
+status: done
+path: .
+ignore-paths: [platform/]
+depends-on: [PLAN]
+task: Build a multi-stage image and run the app with PostgreSQL in local k3d/k3s.
+verification:
+  - Image built and imported; app and PostgreSQL pods reached Ready.
+  - Health and login endpoints returned HTTP 200 through the local ingress.
+  - Local manifests include RBAC, cleanup CronJob, probes, resources, and HPA.
+notes:
+  - This records local delivery, not completion of cloud scalability or HA validation.
+---
+id: LOCAL-GUIDE
+epic: EPIC-1
+requirements: [R0, R5]
+in: [todolist-app/Dockerfile, todolist-app/k8s/, todolist-app/README.md]
+out: [todolist-app/docs/local-kubernetes.md, todolist-app/Makefile, todolist-app/README.md]
+status: done
+path: .
+ignore-paths: [platform/]
+depends-on: [LOCAL-DEPLOY]
+task: Add a beginner-oriented local Kubernetes guide and Makefile entry points.
+verification:
+  - Guide and Makefile delivered; make up, make status, and make health exercised.
+notes:
+  - Clean-machine reproducibility and remaining documentation checks are tracked separately.
+---
+id: LOCAL-VERIFY
+epic: EPIC-1
+requirements: [R0, R5]
+in: [todolist-app/Makefile, todolist-app/README.md, todolist-app/docs/local-kubernetes.md, todolist-app/k8s/]
+out: [todolist-app/Makefile, todolist-app/README.md, todolist-app/docs/local-kubernetes.md]
+status: done
+priority: P0
+path: .
+ignore-paths: [platform/]
+depends-on: [LOCAL-GUIDE]
+task:
+  - Audit beginner instructions against the actual local setup; correct errors without broad refactoring.
+  - Verify installation instructions for Git, make, Docker, k3d, and kubectl; k3d does not bundle kubectl.
+  - Verify the documented venv/PostgreSQL path and browser hostname without custom headers.
+  - Review Makefile context isolation, ordered execution, error propagation, and rebuilt-image rollout behavior.
+  - Correct session documentation if necessary; Flask uses signed client cookies, not pod-local session memory.
+acceptance:
+  - Reproduce setup in an explicitly isolated local cluster without deleting existing user data.
+  - Verify login and basic task creation, completion, and deletion.
+  - Health checks fail on HTTP errors and commands do not accidentally target another cluster.
+  - Document supported platforms and limitations rather than claiming untested platform support.
+verification:
+  - Corrected the false k3d-bundles-kubectl claim, added Git/make prerequisites, removed stale Host headers, fixed the session description, and added a Linux-tested caveat.
+  - make health now uses curl -f and fails on HTTP errors; kubectl targets refuse to run unless the context is k3d-<cluster>.
+  - Deployed an isolated todolist-verify cluster on port 8081: login plus task add, toggle, and delete returned 302/200 as expected; the session survived an app pod restart; the existing todolist cluster was untouched, then the verify cluster was removed.
+notes:
+  - Added make restart because the fixed local image tag means a rebuilt image is not rolled out by make up alone.
+---
+id: AWS-DECISIONS
+epic: EPIC-2
+requirements: [R1, R5]
+in: [PLAN.md, todolist-app/docs/PLAN.md, platform/]
+out: [platform/, todolist-app/docs/]
+status: done
+priority: P0
+path: .
+ignore-paths: []
+depends-on: [PLAN]
+task:
+  - Confirm infrastructure repository placement and explicit ownership of AWS foundation, add-ons, and app releases.
+  - Confirm AWS account, region, quotas, budget, domain, and runner-to-EKS API connectivity approach.
+  - Estimate EKS, nodes, storage, NAT, public IPv4, ALB, Aurora, ECR, logs, and data-transfer costs.
+  - Select supported EKS/add-on versions and Aurora engine/capacity settings.
+acceptance:
+  - Decisions and cost assumptions documented before provisioning billable resources.
+  - One EKS dev is the required cloud scope; no mandatory prod or local promotion stage.
+  - Small-node and reduced-redundancy choices are explained as dev compromises.
+verification:
+  - Wrote platform/README.md plus ADR-style platform/docs/decisions.md and platform/docs/costs.md covering ownership, account/region, scope/sizing/budget, versions, Aurora, CI access, and DNS/TLS.
+  - Confirmed us-east-1, a US$50/month dev budget, a custom Route53 domain with ACM, and a self-hosted in-VPC CI runner; platform/ owns the foundation and todolist-app/ owns the chart and CI.
+  - Verified live: Route53 zone present; EKS 1.36 is latest standard support; quotas are EKS 100 clusters, 64 on-demand vCPU, 5 EIPs; default add-on builds recorded.
+  - Chose t3.small (min 1 / max 2) with a documented t3.medium fallback; cost model shows ~US$6.5 per 20-hour window versus ~US$204/month always-on.
+  - Scrubbed account IDs, IAM user, domain, and conversation-specific text from the public repo.
+notes:
+  - decisions.md records assumptions; the base domain is supplied via a non-committed variable and the dev hostname is dev.todolist.<base_domain>.
+  - EKS 1.36 and default add-on builds are recorded and re-checked at apply time; the Aurora engine version is deferred to implementation.
+---
+id: AWS-STATE-NETWORK
+epic: EPIC-2
+requirements: [R1]
+in: [PLAN.md, platform/]
+out: [platform/]
+status: done
+priority: P0
+path: .
+ignore-paths: [todolist-app/]
+depends-on: [AWS-DECISIONS]
+task:
+  - Bootstrap encrypted remote state with locking and a separate lifecycle from disposable dev infrastructure.
+  - Define reusable VPC/subnet modules and the dev environment root.
+  - Provide required multi-AZ subnet coverage, one dev NAT gateway, tags, and budget alerts.
+acceptance:
+  - OpenTofu formatting and validation pass; review the plan before an authorized apply.
+  - No state, credentials, or secrets committed; retained state supports recreation.
+  - Document NAT failure/cross-AZ costs and that budget alerts are not spending caps.
+verification:
+  - Added platform/bootstrap (S3 state bucket: versioning, SSE-S3, public-access block, HTTPS-only policy, noncurrent-version expiry; local state, separate lifecycle).
+  - Added reusable platform/modules/vpc (multi-AZ public/private subnets, IGW, single NAT, route tables, EKS ELB discovery tags) and wired it into platform/environments/dev with an S3 backend using use_lockfile and a US$50 budget (50/80/100% actual + 100% forecasted).
+  - tofu fmt -check, init -backend=false, and validate pass for bootstrap, module, and dev; plans reviewed: bootstrap 7 resources, dev 17 resources.
+  - .gitignore covers state, tfvars, and backend.hcl; no account IDs or secrets in committed files.
+notes:
+  - Bootstrap was applied (S3 state bucket exists, versioned and AES256-encrypted); the dev network is not applied yet.
+  - One-time migration to self-host bootstrap state (tofu init -migrate-state -backend-config=backend.hcl) is pending.
+  - EKS, database, secrets, and delivery are the next epics; the VPC outputs (subnet IDs, cluster_name tags) are ready for them.
+---
+id: AWS-EKS
+epic: EPIC-3
+requirements: [R1]
+in: [PLAN.md, platform/]
+out: [platform/]
+status: done
+priority: P0
+path: .
+ignore-paths: [todolist-app/]
+depends-on: [AWS-STATE-NETWORK]
+task:
+  - Provision one dev EKS cluster and a small managed node group on private subnets.
+  - Configure bounded capacity, least-privilege IAM, workload identity, and supported add-ons.
+  - Implement the reviewed API access path for operators and CI; OIDC is not network connectivity.
+acceptance:
+  - Nodes and system/add-on pods are healthy with documented application and rollout headroom.
+  - Operator and runner access work without exposing the API unrestricted to the internet.
+  - Record instance/count decisions and estimated running costs.
+verification:
+  - Added platform/modules/eks: one EKS 1.36 cluster, a t3.small managed node group (min 1 / max 2) on private subnets, cluster and node IAM roles, an OIDC provider with an EBS CSI IRSA role, and the vpc-cni/coredns/kube-proxy/aws-ebs-csi-driver managed add-ons.
+  - API access is private by default; operators opt in with explicit CIDRs via cluster_public_access_cidrs, and the in-VPC runner will use the private endpoint. admin_principal_arns creates cluster-admin access entries.
+  - tofu fmt/validate pass; a throwaway plan shows 32 resources (VPC + EKS + budget).
+notes:
+  - Not applied yet; node/add-on health and operator/runner access require an authorized apply plus kubectl verification.
+  - Cost model already uses t3.small min 1 / max 2; control plane ~US$0.10/hr dominates while the cluster exists.
+  - EBS CSI is installed now; the EBS CSI StorageClass/PVC and Cluster Autoscaler come with later epics.
+---
+id: AWS-DATABASE
+epic: EPIC-4
+requirements: [R1]
+in: [PLAN.md, platform/]
+out: [platform/]
+status: done
+priority: P0
+path: .
+ignore-paths: [todolist-app/]
+depends-on: [AWS-STATE-NETWORK]
+task:
+  - Provision private Aurora PostgreSQL Serverless v2 with bounded dev capacity and scoped database access.
+  - Configure a single dev writer, backup/retention settings, and explicit teardown data-retention behavior.
+acceptance:
+  - Validate engine/version capacity and auto-pause behavior without assuming zero idle cost.
+  - Document distributed storage versus compute redundancy and recovery limitations.
+  - Review plan and safeguard data before any destructive change.
+verification:
+  - Added platform/modules/rds: Aurora PostgreSQL Serverless v2 (18.4), one db.serverless writer (0.5-2 ACU), private DB subnet group, a security group allowing 5432 only from the VPC CIDR, storage encryption, 7-day backups, and Secrets Manager-managed master credentials.
+  - Wired the module into dev with variables for engine version, capacity bounds, retention, skip_final_snapshot, and deletion_protection; outputs expose the writer endpoint, port, database name, and secret ARN.
+  - Documented that Serverless v2 has no auto-pause (minimum ACU plus storage accrue) and that dev data is disposable by default (skip_final_snapshot = true). ADR-005 updated.
+  - tofu fmt/validate pass; a throwaway plan shows 38 resources total (6 for RDS).
+notes:
+  - Not applied yet; capacity behavior and connectivity require an authorized apply.
+  - The master credentials live in Secrets Manager and will be consumed via External Secrets Operator in EPIC-5.
+  - A single writer is not database HA; production would add a reader and deletion protection.
+---
+id: AWS-SECRETS
+epic: EPIC-5
+requirements: [R1]
+in: [PLAN.md, platform/, todolist-app/k8s/]
+out: [platform/, todolist-app/charts/todolist/]
+status: done
+priority: P0
+path: .
+ignore-paths: []
+depends-on: [AWS-EKS, AWS-DATABASE]
+task:
+  - Use Secrets Manager for cloud credentials and External Secrets Operator for application secrets.
+  - Prefer service-managed database credential generation and grant least-privilege secret access.
+  - Assign distinct ownership to controller bootstrap and application ExternalSecret resources.
+acceptance:
+  - Secret synchronization verified without printing secret values or storing them in Git.
+  - Protect any sensitive IaC state and document rotation/restart expectations.
+verification:
+  - Added platform/modules/eso: External Secrets Operator Helm release (chart 2.10.0, CRDs enabled), an IRSA role scoped to the database secret ARN (GetSecretValue/DescribeSecret only), and a ClusterSecretStore (aws-secrets-manager) using the operator service account.
+  - Added the Helm provider to the dev root, configured against the EKS cluster with aws eks get-token exec auth; wired the ESO module with the RDS secret ARN.
+  - Documented the ownership split (infra owns the operator, IRSA role, and store; the app repo owns the ExternalSecret in EPIC-7) and rotation/restart expectations in ADR-010 and the README.
+  - tofu fmt/validate pass; a throwaway plan shows 42 resources total (4 for ESO), with the Helm provider deferred until the cluster exists.
+notes:
+  - Not applied yet; secret synchronization cannot be verified until the cluster exists and is applied.
+  - No secret value is stored in Git or Terraform state; only the secret ARN is referenced. State is encrypted with SSE-S3.
+  - The application ExternalSecret is intentionally deferred to APP-HELM (EPIC-7), which owns the chart.
+---
+id: APP-HELM
+epic: EPIC-7
+requirements: [R0, R4]
+in: [PLAN.md, todolist-app/k8s/, todolist-app/Dockerfile]
+out: [todolist-app/charts/todolist/, todolist-app/docs/]
+status: done
+priority: P0
+path: .
+ignore-paths: [platform/]
+depends-on: [LOCAL-DEPLOY, AWS-DECISIONS]
+task:
+  - Package the app for AWS dev using Helm with digest-based images and explicit environment values.
+  - Include configuration, secret references, probes, requests/limits, replicas, HPA, and a capacity-compatible PDB.
+  - Preserve local development and document local PostgreSQL versus cloud database differences.
+acceptance:
+  - Helm lint and template validation pass with no plaintext cloud credentials in rendered manifests.
+  - App resources have one owner; database schema startup and rolling-update behavior are considered.
+verification:
+  - Added todolist-app/charts/todolist with Deployment (digest-preferred image, probes, resources, secrets), Service, ConfigMap, ExternalSecret, ServiceAccount/Role/RoleBinding, Ingress, HPA, PDB, and cleanup CronJob.
+  - Credentials come only from the ClusterSecretStore via the ExternalSecret; no secret value is in values or rendered manifests. values-dev.yaml is gitignored and values-dev.example.yaml uses placeholders.
+  - Documented values, local-vs-cloud differences, schema startup, and rolling-update behavior in docs/helm-chart.md; README links to it.
+  - helm lint and helm template pass; rendered image uses the digest and the Ingress renders the documented hostname.
+notes:
+  - Not deployed; EKS/ALB are not applied yet.
+  - The app still calls db.create_all() at startup; production should use migrations. maxUnavailable 0 / maxSurge 1 and PDB minAvailable 1 protect rolling updates.
+  - The ExternalSecret (app repo) references the infra-owned aws-secrets-manager store, keeping one owner per object.
+---
+id: LOCAL-HELM
+epic: EPIC-7
+requirements: [R0, R5]
+in: [todolist-app/charts/todolist/, todolist-app/k8s/, todolist-app/Makefile, todolist-app/docs/local-kubernetes.md]
+out: [todolist-app/charts/todolist/, todolist-app/Makefile, todolist-app/docs/, todolist-app/README.md]
+status: done
+priority: P0
+path: .
+ignore-paths: [platform/]
+depends-on: [APP-HELM]
+task:
+  - Consolidate the local environment onto the Helm chart so there is one source of truth.
+  - Add a gated in-cluster PostgreSQL template and a plain-Secret path for local; keep Aurora and the ExternalSecret as the cloud default.
+  - Add values-local.yaml (local image tag, Traefik ingress, ExternalSecret off, PostgreSQL on) and switch make up/down/clean to helm upgrade --install and helm uninstall.
+  - Remove the duplicated plain manifests and update the beginner guide and README to the Helm-based flow.
+  - Keep local and cloud differences expressed only in values files, not in duplicated templates.
+acceptance:
+  - helm lint and helm template pass for both values-local.yaml and values-dev.example.yaml.
+  - make up starts the app and PostgreSQL locally through the chart and browser access at localhost:8080 works; make down/clean still clean up.
+  - No duplicated Deployment/Service/ConfigMap/RBAC/HPA/CronJob between k8s/ and the chart; the chart is the single owner.
+  - Local vs cloud differences are documented and limited to values.
+verification:
+  - Added a gated in-cluster PostgreSQL template and a local-only Secret to the chart, with distinct app/postgres component selectors so the app Service never selects database pods.
+  - Added committed values-local.yaml (Postgres on, ExternalSecret off, Traefik, local image) and broadened gitignore so only local and example values are tracked; dev values are injected by the pipeline.
+  - Switched make up/down/restart/logs to helm upgrade --install / helm uninstall and removed the duplicated k8s/ manifests.
+  - Documented the values-strategy rationale in docs/helm-chart.md and updated the local guide, README, and both PLAN copies.
+  - helm lint and helm template pass for values-local.yaml and values-dev.example.yaml; an isolated make up brought up app + Postgres, the Service selected only the 2 app pods, login/CRUD worked, and the cluster was removed afterward.
+notes:
+  - Prioritized as the next task after APP-HELM.
+  - Local and cloud now share one chart; differences are values only (postgresql.enabled, externalSecret.enabled, secrets.create, ingress.className, image).
+  - secrets.create and externalSecret.enabled are mutually exclusive and the chart fails rendering if both are set.
+---
+id: AWS-ACCESS
+epic: EPIC-8
+requirements: [R3]
+in: [PLAN.md, platform/, todolist-app/charts/todolist/]
+out: [platform/, todolist-app/charts/todolist/, todolist-app/docs/]
+status: done
+priority: P0
+path: .
+ignore-paths: []
+depends-on: [AWS-EKS, APP-HELM]
+task:
+  - Bootstrap AWS Load Balancer Controller and expose the app through a Helm-owned Ingress and ALB.
+  - Document DNS/access configuration and ALB Ingress versus Service type LoadBalancer behavior.
+acceptance:
+  - Controller is healthy and rendered routing matches the documented browser hostname.
+  - Restrict HTTP dev demonstrations to disposable synthetic data and non-reused credentials.
+  - Require TLS before sensitive data or real-user access; end-to-end checks are in DEV-VERIFY.
+verification:
+  - Added platform/modules/alb: AWS Load Balancer Controller Helm release (3.5.0) with the official IAM policy and an IRSA role.
+  - Added platform/modules/dns: ACM certificate for dev.todolist.<base_domain> with Route53 DNS validation, plus ExternalDNS (1.22.0) with an IRSA role scoped to the hosted zone.
+  - Wired both into the dev root with a required base_domain variable, a Route53 zone lookup, and outputs (app_hostname, ingress_certificate_arn).
+  - Documented the hostname/TLS and ALB-vs-Service-LoadBalancer choice in platform/README.md and todolist-app/docs/aws-access.md.
+  - tofu fmt/validate pass; a throwaway plan shows 53 resources total (11 for ALB/DNS) with app_hostname dev.todolist.nexusauto.com.br.
+notes:
+  - Not applied; controller health, certificate issuance, and browser routing require an authorized apply and are verified in DEV-VERIFY.
+  - The app chart already supports the ALB annotations and host via values; CI injects the certificate ARN.
+  - ExternalDNS runs upsert-only against ingress sources, scoped to the base domain.
+---
+id: DEV-CICD
+epic: EPIC-6
+requirements: [R2]
+in: [PLAN.md, platform/, todolist-app/]
+out: [platform/, todolist-app/.github/workflows/, todolist-app/docs/]
+status: done
+priority: P0
+path: .
+ignore-paths: []
+depends-on: [AWS-EKS, AWS-SECRETS, APP-HELM, AWS-ACCESS]
+task:
+  - Provision ECR and scoped GitHub Actions AWS OIDC roles with clear infrastructure ownership.
+  - Add validation, build, simple image scan, ECR publish, Helm deploy to dev, and health verification.
+  - Deploy immutable image digests and serialize deployments to avoid races.
+  - Decide whether to keep the vendored Helm charts or mirror them to ECR as OCI artifacts referenced by digest (see platform/docs/vendored-charts.md).
+  - Add a per-environment CI concurrency group and document stale state-lock recovery (force-unlock; never -lock=false).
+acceptance:
+  - A source change triggers a successful dev deployment and smoke checks.
+  - Image scan reports are retained; CRITICAL findings and failed checks block deployment.
+  - No long-lived AWS keys, local-to-dev promotion, or mandatory prod stage.
+  - Verify the actual documented browser URL and record the deployed digest.
+verification:
+  - Added modules/ecr (scan on push, lifecycle, MUTABLE tags for dev) and modules/arc (ARC controller + runner scale set, runner IRSA, EKS access entry, namespaces, runner SA, ExternalSecret for the GitHub App).
+  - Runner is self-hosted in the VPC and uses IRSA (no GitHub OIDC, no long-lived keys); the ESO policy also allows the app and GitHub secrets.
+  - Added todolist-app/.github/workflows/deploy-dev.yml: build -> Trivy scan (fail on CRITICAL, report artifact) -> ECR push by digest -> Helm deploy -> HTTPS smoke test, with a deploy-dev concurrency group.
+  - Documented the pipeline and the required GitHub repo variables in todolist-app/docs/ci-cd.md.
+  - Decided to keep the vendored Helm charts (ECR OCI mirroring remains an optional future step).
+  - Verified the same steps manually: image pushed to ECR, Helm deploy, ALB + Route53 + ACM, and HTTPS /healthz returned ok.
+notes:
+  - End-to-end CI verified: a push to main ran build -> Trivy scan -> ECR push -> Helm deploy -> smoke test on the ARC runner; deployed digest sha256:b15e4dd3 and https://dev.todolist.nexusauto.com.br/healthz returned ok.
+  - Variables are scoped to the dev GitHub Environment (the job declares environment: dev); the GitHub App secret is in Secrets Manager as todolist-dev/github-app and is synced by ESO.
+  - The EKS auth mode had to be set to API_AND_CONFIG_MAP for access entries; the operator IP allowlist must be updated when the public IP changes.
+---
+id: DEV-VERIFY
+epic: EPIC-9
+requirements: [R1, R3, R4]
+in: [PLAN.md, platform/, todolist-app/]
+out: [platform/, todolist-app/docs/]
+status: done
+priority: P0
+path: .
+ignore-paths: []
+depends-on: [DEV-CICD]
+task:
+  - Verify login, task operations, health, pod replacement, rolling updates, and cloud browser access.
+  - Configure and demonstrate bounded HPA and Cluster Autoscaler behavior under controlled load.
+  - Verify database backup/recovery and rehearse dev teardown/recreation after explicit approval.
+acceptance:
+  - Record observed scaling/recovery outcomes, capacity limits, and time needed to recreate dev.
+  - Distinguish pod recovery from node, AZ, and database high availability.
+  - Pause deployment jobs and remove controller-owned load balancers before cluster destruction.
+  - Retain protected state and required backups; audit residual billable resources after teardown.
+verification:
+  - Verified login and task operations over HTTPS, /healthz ok, and browser access on the documented hostname.
+  - Pod replacement recovers in ~7s with no downtime; rolling updates keep the service up (maxUnavailable 0 + PDB).
+  - Installed metrics-server and Cluster Autoscaler; HPA scaled 2 -> 6 under load and the autoscaler added a node (2 -> 3).
+  - Aurora has 7-day retention and point-in-time restore.
+notes:
+  - The teardown/recreation rehearsal is deferred to the end-of-project action (the owner will destroy after all work and recreate before the presentation); the procedure is in platform/docs/runbook.md.
+  - HA distinctions: pod recovery is not node/AZ HA (one node group, one NAT), and a single Aurora writer is not database HA.
+---
+id: DOCS-RUNBOOK
+epic: EPIC-11
+requirements: [R5]
+in: [PLAN.md, platform/, todolist-app/]
+out: [platform/, todolist-app/README.md, todolist-app/docs/]
+status: done
+priority: P0
+path: .
+ignore-paths: []
+depends-on: [PLAN]
+task:
+  - Maintain operational docs alongside implementation, not after optional features.
+  - Write approximately five substantive ADRs covering cloud/environment scope, IaC ownership, delivery, database, and cost/availability trade-offs.
+  - Provide architecture, prerequisites, provision/deploy/access/troubleshoot, teardown/recreate, and recovery instructions.
+acceptance:
+  - Finalize against DEV-VERIFY evidence before marking this task done.
+  - Record known limitations, measured costs/recovery time, and synthetic-data restrictions.
+  - Keep root and repository plan copies consistent; do not claim planned cloud work is implemented.
+  - README environment-strategy changes are reviewed; committing/pushing requires a separate request.
+verification:
+  - Added platform/docs/runbook.md: architecture, prerequisites, provision, deploy, access, troubleshooting, teardown/recreate, recovery, costs, and DEV-VERIFY evidence.
+  - ADR-001..ADR-010 in platform/docs/decisions.md cover environment scope, IaC ownership, delivery, database, secrets, add-ons, DNS/TLS, state/pipeline, versions, and cost/availability trade-offs.
+  - Added docs indexes (platform/docs/README.md, todolist-app/docs/README.md) and agent guides; docs are consistent English.
+notes:
+  - Root and repository plan copies remain synced; planned-but-unapplied items are labeled as such.
+  - Docs are kept local pending the owner's end-of-project documentation commit pass (DOCS-REVIEW).
+---
+id: DOCS-REVIEW
+epic: EPIC-11
+requirements: [R5]
+in: [PLAN.md, todolist-app/docs/, todolist-app/README.md, platform/docs/, platform/README.md]
+out: [todolist-app/docs/, todolist-app/README.md, platform/docs/, platform/README.md]
+status: done
+priority: P0
+path: .
+ignore-paths: []
+depends-on: [DOCS-RUNBOOK, DEV-VERIFY]
+task:
+  - Assume the required delivery tasks are done; review every document for accuracy, audience fit, and consistency with the code.
+  - Create context-optimized entry points so humans and AI agents can navigate the project quickly (a docs index, a concise overview, and an agent guide with commands and conventions).
+  - Start with the todolist-app docs (markdown under docs/), then the infra docs and the root plan/task files.
+  - Remove content that does not serve the target audience, fix stale or contradictory statements, and keep one language and style per document set.
+  - Defer advanced diagrams and the structured docs endpoint / narrative book to later work.
+acceptance:
+  - Every doc states its audience and purpose; nothing contradicts the code or the plan.
+  - Context-optimized entry points exist and link to the source of truth instead of duplicating it.
+  - Language and terminology are consistent within each repository; no conversation-specific or local-only content.
+  - Advanced diagrams and the docs endpoint are explicitly deferred and tracked.
+notes:
+  - Assumes R0-R5 are delivered; this is the final documentation pass before optional work.
+  - The output feeds a future structured docs endpoint and a narrative book.
+verification:
+  - Standardized on English; translated the app README and local-kubernetes guide.
+  - Added context-optimized entry points: platform/AGENTS.md and todolist-app/AGENTS.md plus docs/README.md indexes in both repos.
+  - Added platform/docs/runbook.md and refreshed platform/README.md, costs.md, and vendored-charts.md to match the delivered modules.
+  - Refreshed PLAN.md (root and synced copy) to reflect the delivered layout; removed account IDs, ARNs, hostnames, and conversation-specific content from committed docs.
+  - Advanced diagrams and the structured docs endpoint / narrative book are explicitly deferred.
+---
+id: APP-RELEASES
+epic: EPIC-6
+requirements: [R2, R5]
+in: [todolist-app/.github/workflows/, todolist-app/docs/, todolist-app/]
+out: [todolist-app/.github/workflows/, todolist-app/docs/, todolist-app/]
+status: done
+priority: P1
+path: .
+ignore-paths: [platform/]
+depends-on: [DEV-CICD]
+task:
+  - Adopt Conventional Commits as the source of truth for the app's versioning.
+  - Automate semantic versioning and GitHub Releases (tag + generated changelog) from the commit history.
+  - Choose the tool (release-please or semantic-release) and define how the release version relates to the deployed image digest.
+  - Keep the deploy pinned to the image digest; the release version is metadata, not a mutable tag.
+acceptance:
+  - fix -> patch, feat -> minor, breaking change -> major; docs/chore/ci do not bump the version.
+  - A merge to main yields a tag and a GitHub Release with a generated changelog, and the dev deploy still pins the digest.
+  - Documented in the app docs; no manual version bumping.
+notes:
+  - Conventional commits are already used in both repos; this automates the version and changelog from them.
+  - GitHub Releases complement the digest-based deploy (release = version, deploy = digest).
+  - Triggers: the dev deploy and release-please both run on push to main (a merged PR is a push). Prod will deploy on a published release, not on every commit (see PROD-PROMOTION).
+verification:
+  - Added release-please config, manifest, and workflow; fix -> patch, feat -> minor, breaking -> major, docs/chore/ci -> no release.
+  - Verified: release 1.1.0 was tagged and released, and a release PR for 1.2.0 was opened; deploys stay pinned to the image digest.
+  - The deploy pipeline now reads its wiring from SSM (/todolist/dev) rather than repo variables.
+---
+id: PROD-PROMOTION
+epic: EPIC-12
+requirements: [R1, R2, R4]
+in: [PLAN.md, platform/, todolist-app/]
+out: [platform/, todolist-app/]
+status: done
+priority: P1
+path: .
+ignore-paths: []
+depends-on: [DEV-VERIFY, DOCS-RUNBOOK]
+task:
+  - Only if time/budget allow, provision a separate prod cluster with independent state, database, secrets, and IAM.
+  - Promote the same tested dev image digest with approval and post-deployment verification.
+  - Trigger production deploys on a published GitHub Release (or approval-gated workflow_dispatch), never on every commit.
+acceptance:
+  - Production capacity, redundancy, TLS, backup/restore, and operational safeguards are validated.
+  - Production deploys the tagged, dev-validated digest; no rebuild for prod.
+  - Rollback is tested; database migration recovery is addressed separately from image rollback.
+verification:
+  - Added environments/prod (own state key, VPC 10.1.0.0/16, cluster, Aurora, secrets, IAM, SSM, DNS, ARC runner) mirroring dev's small footprint with prod safeguards (deletion protection, final snapshot, 14-day backups, control-plane logging); ECR and the GitHub App are shared.
+  - Verified: prod applied (93 resources) and served over HTTPS (200 at the prod /healthz); prod deployed the dev-validated digest by promotion with no rebuild.
+  - Rollback tested: reverting the digest rolled prod back to the previous image and restoring returned it to the promoted digest, both reconciled by Argo CD.
+  - Database migration recovery is documented as separate from image rollback (a schema change is not undone by rolling the image back).
+---
+id: GITOPS
+epic: EPIC-10
+in: [PLAN.md, platform/, todolist-app/]
+out: [platform/, todolist-app/]
+status: done
+priority: P1
+path: .
+ignore-paths: []
+depends-on: [DEV-VERIFY, DOCS-RUNBOOK]
+task:
+  - Introduce ArgoCD with explicit ownership transfer from the Helm deployment pipeline.
+  - Treat Argo Rollouts canary/metric-based analysis as a separate optional increment.
+acceptance:
+  - Verify reconciliation and rollback behavior without competing resource owners.
+verification:
+  - Added modules/argocd (vendored argo-cd 10.9.2) and modules/argocd-app; Argo CD is installed in dev and prod and owns the application release.
+  - Explicit transfer: CI no longer runs helm upgrade. It builds, scans, pushes, and commits the image digest; Argo CD reconciles. The inert Helm release history was removed in dev so Argo CD is the sole owner.
+  - Argo CD rendered with the same Helm release name, so it adopted the existing objects (a single set, no duplicates) and set its tracking annotation.
+  - Reconciliation and rollback verified in dev and prod; Argo Rollouts canary analysis remains a separate optional increment.
+---
+id: FUTURE-HARDENING
+in: [PLAN.md, platform/, todolist-app/]
+out: [platform/, todolist-app/]
+status: done
+priority: P2
+path: .
+ignore-paths: []
+depends-on: [DEV-VERIFY, DOCS-RUNBOOK]
+task:
+  - Consider production-like staging for performance, load, migration, resilience, and release testing.
+  - Expand quality gates with tests/coverage policy, SAST, dependency/IaC scanning, SBOM, signing, and admission controls.
+  - Consider observability/alerting, Karpenter/Spot, WAF, External DNS, and further network hardening when justified.
+acceptance:
+  - Split selected improvements into individually approved tasks before implementation.
+  - Do not treat a basic image scan as a complete security program.
+verification:
+  - Added platform/docs/hardening.md: a prioritized backlog (HS-01..HS-28) with current state, proposed change, effort, and priority; each item is meant to become its own approved task/PR/apply.
+  - Indexed it in platform/docs/README.md and referenced it from PLAN.md section 10.
+  - Scope was backlog only; nothing was applied to the running stack.
+---
+id: GITOPS-HUB
+epic: EPIC-10
+requirements: [R1, R2, R4]
+in: [PLAN.md, platform/, todolist-app/]
+out: [platform/, todolist-app/]
+status: open
+priority: P1
+next: true
+path: .
+ignore-paths: []
+depends-on: [GITOPS, PROD-PROMOTION]
+task:
+  - Run a single Argo CD that manages every environment (one view), instead of one Argo CD per cluster; it lives in the prod cluster (no hub cluster for now).
+  - Stop embedding the application name in cluster names; a cluster is platform infrastructure that hosts many services, not one app (for example platform-dev / platform-prod).
+  - Move the shared artifact registry (ECR) out of the environment roots and into the platform, so an environment's lifecycle cannot delete another environment's dependency.
+  - Separate concerns: the platform repo owns the clusters, add-ons, Argo CD, and the published contract; the app repo owns an ApplicationSet that generates its per-environment Applications.
+  - Keep apps decoupled from platform internals; they consume the published contract (SSM parameters) rather than Terraform internals.
+  - Deliver the contract at render time with a config-management plugin (CMP) that reads SSM, so the platform stays application-agnostic (ADR-015); Terraform-injected Application values are only the interim.
+  - Adopt trunk-based delivery: one branch (main), per-environment config in envs/<env>/, and promotion through a pull request (no environment branches).
+  - Version the chart as an OCI artifact; pin the chart version and the image digest per environment, so main affects dev only and prod changes only through the promotion PR.
+  - Size prod to scale to 3 worker nodes (max).
+acceptance:
+  - One Argo CD UI/API shows dev, prod, and future environments.
+  - Cluster names contain no application name (for example platform-dev / platform-prod).
+  - The ECR repository is owned by the platform, not an environment root.
+  - An ApplicationSet manifest in the app repository generates the per-environment Applications.
+  - The application references only the published contract (SSM), never platform internals.
+  - Applications resolve the contract at render time (a CMP plugin), not through Terraform-injected Application values (ADR-015).
+  - A commit to main changes dev only; prod changes only through a reviewed promotion pull request (ADR-014).
+  - Branch-per-environment and image version tags are not used (ADR-014).
+notes:
+  - See ADR-013 for the decision and the open questions.
+  - "Argo CD lives in prod (no hub). It must reach each environment's private API: VPC peering now, a hub/Transit Gateway later."
+  - "How Argo CD consumes the SSM contract: the platform writes wiring into a ConfigMap Argo CD reads, a render plugin (argocd-vault-plugin) reads SSM at render time, or CI writes per-environment values."
+  - "Where the ApplicationSet lives (app repo per the request) and how promotion selects the digest (dev-validated digest into the prod values)."
+  - This supersedes the per-cluster Argo CD from GITOPS; that task remains done as the first increment.
+  - "Progress (local code, no apply): ADR-016 records the single-Argo CD design; modules/argocd gained optional server.insecure + ingress (default off; port-forward is used today); the app repo has deploy/applicationset.yaml (cluster generator, one Application per environment)."
+  - "Remaining cutover (needs an apply): peer prod to dev (private EKS APIs), register dev as a cluster labeled platform/environment=dev (and label the local cluster prod), create the app-of-apps Application for deploy/, remove the per-environment Applications and the dev Argo CD, then add the render-time CMP plugin (ADR-015)."
+---
+id: OBSERVABILITY
+epic: EPIC-13
+requirements: [R4]
+in: [PLAN.md, platform/]
+out: [platform/]
+status: open
+priority: P1
+path: .
+ignore-paths: []
+depends-on: [GITOPS-HUB]
+task:
+  - Add a basic Prometheus + Grafana stack (kube-prometheus-stack) for cluster and application metrics.
+  - Provide at least one application dashboard and one cluster dashboard (nodes, HPA, ALB, Aurora).
+  - Keep it lean (single replica, short retention) so it fits the small nodes and the budget.
+acceptance:
+  - Prometheus scrapes the cluster and the app; Grafana serves app and cluster dashboards.
+  - A few alerts are defined (pod restarts, ALB 5xx, node pressure).
+  - Documented as the observability baseline; the deeper alerting in hardening.md (HS-18) builds on it.
+---
+id: ARCH-DOCS
+in: [PLAN.md, platform-docs/]
+out: [platform-docs/]
+status: done
+priority: P2
+path: .
+ignore-paths: []
+depends-on: [GITOPS-HUB]
+task:
+  - Document why Argo CD was chosen over Flux CD (side-by-side comparison: model, multi-cluster, UI, ApplicationSet, secrets, maturity, operational cost).
+  - Document why no service mesh is used; a single service does not justify the cost and complexity.
+acceptance:
+  - A decision record with the Argo CD vs Flux CD comparison and the selection rationale.
+  - A short section on the no-service-mesh decision and what would change it (multiple services, mTLS/zero-trust, canary/traffic splitting, or finer-grained observability).
+verification:
+  - Added ADR-017 to the platform handbook decisions: a side-by-side Argo CD vs Flux CD table (model, multi-cluster, UI, ApplicationSet/templating, secrets, maturity, reconcile model, operational cost), the selection rationale, consequences, and the conditions to revisit.
+  - Added ADR-018 (no service mesh) with the current primitives (ALB/ACM, NetworkPolicy, probes/PDB, Prometheus baseline, Argo Rollouts) and the conditions that would change the decision (multiple services, mTLS/zero-trust, traffic splitting, finer-grained L7 observability, multi-tenant isolation).
+  - Replaced the gitops.md "comparison is planned" placeholder with a summary linking ADR-017 and added a short service-mesh section to architecture/overview.md linking ADR-018; refreshed the decisions index header to cover the platform (not just dev).
+notes:
+  - Documentation-only; delivered ahead of the GITOPS-HUB cutover because it needs no apply. The handbook builds clean with mkdocs build --strict.
+---
+id: PLATFORM-RENAME
+in: [PLAN.md, platform/]
+out: [platform/]
+status: open
+priority: P1
+path: .
+ignore-paths: []
+depends-on: [GITOPS-HUB]
+task:
+  - Rename the infrastructure repository from infra to platform to reflect its scope (a platform hosting many applications, not one app's infrastructure).
+  - Rename clusters and platform resources to platform-scoped names; update every reference (workflows, docs, SSM contract paths, module names).
+  - Keep the artifact registry and shared services owned by the platform.
+acceptance:
+  - No application name appears in a platform repository path, cluster name, or platform resource name.
+  - The application repository and pipelines reference the renamed repository and the published contract.
+  - The state bucket and remote state are preserved (no data loss on rename).
+notes:
+  - Renaming a GitHub repository changes its URL; update remotes, workflow references, and documentation.
+  - Move the SSM contract to platform-scoped: environment facts at /platform/<env>/<key> and application facts at /platform/<env>/apps/<app>/<key>, with each runner's read policy scoped to its own app namespace. Resolve whether the platform still provisions an application's database and secrets or only publishes platform facts.
+---
+id: PLATFORM-DOCS
+epic: EPIC-13
+requirements: [R5]
+in: [PLAN.md, TASKS.yaml, DESAFIO.md, platform-docs/]
+out: [PLAN.md, TASKS.yaml, todolist-app/docs/, platform-docs/]
+status: in_progress
+priority: P1
+path: .
+ignore-paths: []
+depends-on: [GITOPS-HUB, PLATFORM-RENAME]
+task:
+  - Review TASKS.yaml and PLAN.md after the delivered work and improve them.
+  - Add the plan and the task tracker to todolist-app/docs/ and reference them from the app README.
+  - Reduce the platform's cost and complexity so it can be destroyed while the handbook stays online:
+    serve the handbook as a static S3 + CloudFront site owned by the platform-docs repository.
+  - Improve the handbook with a "Todolist use case" narrative drawn from DESAFIO.md.
+acceptance:
+  - PLAN.md and TASKS.yaml reflect the delivered architecture.
+  - todolist-app/docs/ contains the plan and the tasks, and the README links to them.
+  - The handbook is a static site whose delivery does not require the EKS cluster to serve it.
+  - A "Todolist use case" page tells the story of the challenge end to end.
+notes:
+  - The static migration was delivered (infra/ in platform-docs; https://docs.nexusauto.com.br/).
+  - The cutover (removing the in-cluster docs app and its platform resources) is pending.
+  - Tooling decided: MkDocs Material.
+---
+id: GITOPS-ADDONS
+epic: EPIC-10
+in: [PLAN.md, platform/, todolist-app/]
+out: [platform/, todolist-app/]
+status: deferred
+priority: P2
+path: .
+ignore-paths: []
+depends-on: [GITOPS-HUB]
+task:
+  - Move the third-party cluster controllers (ALB controller, ExternalDNS, External Secrets Operator, metrics-server, Cluster Autoscaler, ARC) from Terraform-managed Helm releases to Argo CD (app-of-apps).
+  - Keep AWS-managed add-ons (vpc-cni, coredns, kube-proxy, ebs-csi), IAM/IRSA roles, the Argo CD bootstrap, and the contract in Terraform.
+  - Publish the IRSA role ARNs through the contract so the add-on Applications consume them.
+acceptance:
+  - One reconciliation model for in-cluster components (drift detection and self-heal for add-ons).
+  - Terraform owns AWS foundations, IAM, the Argo CD bootstrap, and EKS-managed add-ons; Argo CD owns the Helm-based controllers.
+  - The transfer is explicit (state rm + adoption); one owner per object.
+notes:
+  - Future work: Terraform already manages the add-ons correctly, so this is deferred until the operational benefit (one model, drift/self-heal, cleaner CRD ordering) outweighs the added complexity (bootstrap ordering, the IAM split, the migration).
+  - See ADR-009 (which anticipated the transfer) and ADR-013 (platform vs application separation).

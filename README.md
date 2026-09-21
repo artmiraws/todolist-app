@@ -6,7 +6,17 @@ A web task-list application.
 
 > How this app is delivered — the platform it runs on, the contract it consumes, and its pipeline —
 > is documented in the platform handbook's
-> [worked example](https://platform-docs.nexusauto.com.br/onboarding/worked-example/).
+> [worked example](https://docs.nexusauto.com.br/onboarding/worked-example/).
+
+## Documentation
+
+| Document | What it covers |
+|---|---|
+| [`docs/PLAN.md`](docs/PLAN.md) | The delivery plan and the delivered architecture. |
+| [`docs/TASKS.yaml`](docs/TASKS.yaml) | The task tracker (plan → done, with evidence). |
+| [`docs/local-kubernetes.md`](docs/local-kubernetes.md) | Running the app locally on k3d/k3s. |
+| [`docs/helm-chart.md`](docs/helm-chart.md) | The Helm chart and local vs cloud differences. |
+| [Platform handbook](https://docs.nexusauto.com.br/) | How the platform is built, operated, and extended. |
 
 ## Stack
 
