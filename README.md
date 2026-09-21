@@ -204,6 +204,9 @@ The deploy (local and cloud) uses a single Helm chart. Local values live in
   metric may not appear immediately; the HPA waits for the first reading before scaling.
 - The `/pods` and `/cleanup/status` pages require the chart's RBAC permissions. Without them, the app
   returns a friendly message.
+- On AWS, the wiring (hostname, database, secret ARNs, image repository) comes from the platform
+  [contract](https://docs.nexusauto.com.br/concepts/contract/) in SSM under `/platform/<env>`, not from
+  repository variables.
 
 ## Helm
 
