@@ -113,7 +113,7 @@ jobs:
       - name: Smoke test
         run: |
           set -euo pipefail
-          APP_HOSTNAME="$(aws ssm get-parameter --name "/todolist/${ENVIRONMENT}/app_hostname" --query Parameter.Value --output text)"
+          APP_HOSTNAME="$(aws ssm get-parameter --name "/platform/${ENVIRONMENT}/apps/todolist/hostname" --query Parameter.Value --output text)"
           for i in $(seq 1 20); do
             if curl -fsS --max-time 15 "https://${APP_HOSTNAME}/healthz"; then
               echo; echo "Smoke test passed"; exit 0
