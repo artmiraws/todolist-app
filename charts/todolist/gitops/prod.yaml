@@ -1,4 +1,4 @@
 # Desired prod image. Only the promotion workflow (.github/workflows/promote-prod.yml) writes here,
 # and only with the digest dev already validated. Argo CD reconciles it. See ADR-011 and ADR-012.
 image:
-  digest: "sha256:c6e27c62b50bcbcc40b953f6b463983d0ff17d54faa642c8ed0e9904ba57f0c3"
+  digest: "sha256:2cb5ebc4bcfa8cf1a9bc08343bc30fc20b1dc6cd39cd990b03d4adcf9a6c4169"
