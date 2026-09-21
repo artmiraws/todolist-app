@@ -4,6 +4,10 @@ A web task-list application.
 
 ![App main screen](assets/todolist.png)
 
+> How this app is delivered — the platform it runs on, the contract it consumes, and its pipeline —
+> is documented in the platform handbook's
+> [worked example](https://platform-docs.nexusauto.com.br/onboarding/worked-example/).
+
 ## Stack
 
 - Python 3.11
