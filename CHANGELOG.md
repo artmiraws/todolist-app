@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.6.0](https://github.com/artmiraws/todolist-app/compare/v1.5.1...v1.6.0) (2026-09-23)
+
+
+### Features
+
+* **UI:** change main collor to purple ([c9a04eb](https://github.com/artmiraws/todolist-app/commit/c9a04eb3d85ac73c627a4e596abab32638b0c42c))
+
 ## [1.5.1](https://github.com/artmiraws/todolist-app/compare/v1.5.0...v1.5.1) (2026-09-21)
 
 
