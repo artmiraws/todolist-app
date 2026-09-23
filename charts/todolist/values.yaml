@@ -38,7 +38,7 @@ service:
 config:
   appName: TodoList
   appPort: "5000"
-  appColor: ""
+  appColor: purple
   # Set the Aurora writer endpoint and database name at deploy time.
   dbHost: ""
   dbPort: "5432"

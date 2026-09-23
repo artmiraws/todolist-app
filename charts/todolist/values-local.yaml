@@ -25,7 +25,7 @@ postgresql:
   enabled: true
 
 config:
-  appColor: blue
+  appColor: purple
 
 ingress:
   className: traefik
